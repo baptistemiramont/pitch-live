@@ -28,7 +28,7 @@ public class FrameBroadcaster {
 	private final Map<String, ClientConnection> clients = new ConcurrentHashMap<>();
 
 	/** La dernière image publiée, pour qu'un nouveau client voie le terrain tout de suite. */
-	private final AtomicReference<String> lastFrame = new AtomicReference<>();
+	private final AtomicReference<EncodedFrame> lastFrame = new AtomicReference<>();
 
 	/**
 	 * Écrit une fois au démarrage, lu ensuite par les threads de Tomcat. volatile
@@ -42,24 +42,24 @@ public class FrameBroadcaster {
 	}
 
 	/** Appelé par le thread d'horloge, 25 fois par seconde : ne bloque jamais. */
-	void publish(String frame) {
+	void publish(EncodedFrame frame) {
 		lastFrame.set(frame);
 		for (ClientConnection client : clients.values()) {
 			client.offer(frame);
 		}
 	}
 
-	public void connect(String id, ClientChannel channel) {
-		ClientConnection client = new ClientConnection(id, channel, presentation);
+	public void connect(String id, ClientChannel channel, FrameFormat format) {
+		ClientConnection client = new ClientConnection(id, channel, presentation, format);
 		// La dernière image est déposée avant l'inscription : l'horloge ne peut pas
 		// encore écrire dans cette boîte, aucun risque d'écraser une image plus récente.
-		String last = lastFrame.get();
+		EncodedFrame last = lastFrame.get();
 		if (last != null) {
 			client.offer(last);
 		}
 		clients.put(id, client);
 		client.start();
-		log.info("Client {} connecté ({} en tout)", id, clients.size());
+		log.info("Client {} connecté en {} ({} en tout)", id, format, clients.size());
 	}
 
 	public void setRate(String id, int framesPerSecond) {

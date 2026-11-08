@@ -24,13 +24,14 @@ final class ClientConnection {
 	private final String id;
 	private final ClientChannel channel;
 	private final String presentation;
+	private final FrameFormat format;
 
 	/**
 	 * Une seule place : ce n'est pas une file d'attente mais « la dernière image ».
 	 * Une file sans limite ferait prendre au client lent un retard croissant, et
 	 * finirait par remplir la mémoire du serveur.
 	 */
-	private final BlockingQueue<String> mailbox = new ArrayBlockingQueue<>(1);
+	private final BlockingQueue<EncodedFrame> mailbox = new ArrayBlockingQueue<>(1);
 
 	/**
 	 * L'intervalle minimal entre deux envois ; 0 pour envoyer toutes les images.
@@ -41,10 +42,11 @@ final class ClientConnection {
 
 	private Thread sender;
 
-	ClientConnection(String id, ClientChannel channel, String presentation) {
+	ClientConnection(String id, ClientChannel channel, String presentation, FrameFormat format) {
 		this.id = id;
 		this.channel = channel;
 		this.presentation = presentation;
+		this.format = format;
 	}
 
 	String id() {
@@ -55,7 +57,7 @@ final class ClientConnection {
 	 * Dépose une image, en remplaçant celle qui attendait encore. Appelé par le
 	 * thread d'horloge : ne bloque jamais.
 	 */
-	void offer(String frame) {
+	void offer(EncodedFrame frame) {
 		while (!mailbox.offer(frame)) {
 			mailbox.poll();
 		}
@@ -86,11 +88,11 @@ final class ClientConnection {
 		try {
 			// La présentation part en premier, depuis ce thread : un seul thread
 			// écrit dans la session, les messages ne peuvent pas se croiser.
-			channel.send(presentation);
+			channel.sendText(presentation);
 			while (true) {
-				String frame = mailbox.take();
+				EncodedFrame frame = mailbox.take();
 				long sentAt = System.nanoTime();
-				channel.send(frame);
+				send(frame);
 
 				// Fréquence réduite : le thread dort jusqu'au prochain envoi permis. Pendant
 				// ce temps, l'horloge continue de remplacer l'image en attente ; au réveil,
@@ -108,6 +110,14 @@ final class ClientConnection {
 			// défaut), qui le fait échouer : on coupe.
 			log.info("Envoi impossible au client {}, déconnexion : {}", id, e.getMessage());
 			channel.close();
+		}
+	}
+
+	private void send(EncodedFrame frame) throws IOException {
+		if (format == FrameFormat.BINARY) {
+			channel.sendBinary(frame.binary());
+		} else {
+			channel.sendText(frame.json());
 		}
 	}
 }

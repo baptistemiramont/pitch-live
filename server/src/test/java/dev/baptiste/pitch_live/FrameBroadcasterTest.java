@@ -30,20 +30,21 @@ class FrameBroadcasterTest {
 		broadcaster.disconnect("fast");
 		broadcaster.disconnect("slow");
 		broadcaster.disconnect("late");
+		broadcaster.disconnect("binary");
 	}
 
 	@Test
 	void aSlowClientDoesNotHoldBackTheOthers() throws InterruptedException {
 		FakeClient fast = new FakeClient(Duration.ZERO);
 		FakeClient slow = new FakeClient(Duration.ofMillis(300));
-		broadcaster.connect("fast", fast);
-		broadcaster.connect("slow", slow);
+		broadcaster.connect("fast", fast, FrameFormat.JSON);
+		broadcaster.connect("slow", slow, FrameFormat.JSON);
 
 		// 20 images, une toutes les 10 ms, comme une horloge accélérée
 		long publishingNanos = 0;
 		for (int i = 1; i <= 20; i++) {
 			long start = System.nanoTime();
-			broadcaster.publish("frame-" + i);
+			broadcaster.publish(frame(i));
 			publishingNanos += System.nanoTime() - start;
 			Thread.sleep(10);
 		}
@@ -62,11 +63,11 @@ class FrameBroadcasterTest {
 
 	@Test
 	void aLateClientGetsThePresentationThenTheCurrentFrameAtOnce() {
-		broadcaster.publish("frame-1");
-		broadcaster.publish("frame-2");
+		broadcaster.publish(frame(1));
+		broadcaster.publish(frame(2));
 
 		FakeClient late = new FakeClient(Duration.ZERO);
-		broadcaster.connect("late", late);
+		broadcaster.connect("late", late, FrameFormat.JSON);
 
 		waitUntil(() -> late.received.size() == 2);
 		assertEquals(List.of("match", "frame-2"), late.received);
@@ -75,18 +76,33 @@ class FrameBroadcasterTest {
 	@Test
 	void aClientCanAskForFewerFramesAndStillGetsTheLatest() throws InterruptedException {
 		FakeClient fast = new FakeClient(Duration.ZERO);
-		broadcaster.connect("fast", fast);
+		broadcaster.connect("fast", fast, FrameFormat.JSON);
 		broadcaster.setRate("fast", 5);
 
 		// 50 images en 500 ms ; à 5 images par seconde, une toutes les 200 ms
 		for (int i = 1; i <= 50; i++) {
-			broadcaster.publish("frame-" + i);
+			broadcaster.publish(frame(i));
 			Thread.sleep(10);
 		}
 
 		waitUntil(() -> fast.lastReceived().equals("frame-50"));
 		assertTrue(fast.frameCount() >= 3 && fast.frameCount() <= 5,
 				"attendu 3 à 5 images, reçu " + fast.frameCount());
+	}
+
+	@Test
+	void aBinaryClientGetsThePresentationAsTextThenBinaryFrames() {
+		FakeClient binary = new FakeClient(Duration.ZERO);
+		broadcaster.connect("binary", binary, FrameFormat.BINARY);
+		broadcaster.publish(frame(7));
+
+		waitUntil(() -> binary.received.size() == 2);
+		assertEquals(List.of("match", "binary-7"), binary.received);
+	}
+
+	/** Une image encodée : « frame-i » en JSON, un seul octet i en binaire. */
+	private static EncodedFrame frame(int i) {
+		return new EncodedFrame("frame-" + i, new byte[] { (byte) i });
 	}
 
 	/** Un faux navigateur : il note ce qu'il reçoit, et met readTime à lire chaque message. */
@@ -100,7 +116,16 @@ class FrameBroadcasterTest {
 		}
 
 		@Override
-		public void send(String message) throws IOException {
+		public void sendText(String message) throws IOException {
+			receive(message);
+		}
+
+		@Override
+		public void sendBinary(byte[] message) throws IOException {
+			receive("binary-" + message[0]);
+		}
+
+		private void receive(String message) throws IOException {
 			received.add(message);
 			try {
 				Thread.sleep(readTime);

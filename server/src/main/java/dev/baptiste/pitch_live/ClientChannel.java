@@ -7,11 +7,13 @@ import java.io.IOException;
  *
  * En production, c'est une session WebSocket (voir MatchWebSocketHandler). Dans les
  * tests, c'est un faux client qu'on peut rendre lent à volonté, sans navigateur.
+ * Les envois peuvent bloquer tant que le client ne lit pas.
  */
 public interface ClientChannel {
 
-	/** Envoie un message ; peut bloquer tant que le client ne lit pas. */
-	void send(String message) throws IOException;
+	void sendText(String message) throws IOException;
+
+	void sendBinary(byte[] message) throws IOException;
 
 	void close();
 }

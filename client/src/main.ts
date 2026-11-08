@@ -1,11 +1,20 @@
 import './style.css'
 import { connect, type ConnectionStatus } from './connection.ts'
 import { LatencyWindow, now } from './latency.ts'
-import { PROTOCOL_VERSION, type Frame, type MatchMessage, type PlayerProfile, type ServerMessage } from './protocol.ts'
+import {
+  PROTOCOL_VERSION,
+  decodeBinaryFrame,
+  type Frame,
+  type MatchMessage,
+  type PlayerProfile,
+  type ServerMessage,
+} from './protocol.ts'
 import { PitchRenderer } from './render.ts'
 import { interpolate, type ReceivedFrame, type ShownFrame } from './smoothing.ts'
 
-const SERVER_URL = `ws://${location.hostname}:8080/match`
+// Le format se choisit à la connexion, par l'adresse de la page : ?format=binary
+const BINARY = new URLSearchParams(location.search).get('format') === 'binary'
+const SERVER_URL = `ws://${location.hostname}:8080/match${BINARY ? '?format=binary' : ''}`
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connecting: 'Connexion…',
@@ -25,6 +34,7 @@ let previous: ReceivedFrame | null = null
 let smoothing = false
 let slowClient = false
 let receivedThisSecond = 0
+let bytesThisSecond = 0
 
 // Les images sautées se voient aux trous dans les numéros : à 5 images par seconde,
 // le serveur n'envoie qu'une image sur cinq, toujours la plus récente.
@@ -47,10 +57,11 @@ const receivedLabel = document.querySelector<HTMLElement>('#received')!
 const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
 const smoothingCheckbox = document.querySelector<HTMLInputElement>('#smoothing')!
 const slowClientCheckbox = document.querySelector<HTMLInputElement>('#slow-client')!
+const formatSelect = document.querySelector<HTMLSelectElement>('#format')!
 const latencyLabel = document.querySelector<HTMLElement>('#latency')!
 
 // Réception : aucun dessin ici, on garde seulement les deux dernières images.
-function onMessage(message: ServerMessage, receivedAt: number) {
+function onMessage(message: ServerMessage, receivedAt: number, size: number) {
   if (message.v !== PROTOCOL_VERSION) {
     console.warn(`Message en version ${message.v} ignoré, ce client parle la version ${PROTOCOL_VERSION}`)
     return
@@ -77,8 +88,18 @@ function onMessage(message: ServerMessage, receivedAt: number) {
       latest = { frame, sentAt: message.sentAt, receivedAt }
       receptionLatency.add(receivedAt - message.sentAt)
       receivedThisSecond++
+      bytesThisSecond += size
       break
     }
+  }
+}
+
+// Une image binaire ne se comprend qu'avec la feuille de match, reçue en JSON juste
+// avant : le serveur envoie toujours la présentation en premier.
+function onBinary(data: ArrayBuffer, receivedAt: number) {
+  const message = match && decodeBinaryFrame(data, match.players)
+  if (message) {
+    onMessage(message, receivedAt, data.byteLength)
   }
 }
 
@@ -114,10 +135,13 @@ setInterval(() => {
   lastHudUpdate = performance.now()
   const received = Math.round(receivedThisSecond / elapsedSeconds)
   const skipped = Math.round(skippedThisSecond / elapsedSeconds)
+  const averageSize = receivedThisSecond ? Math.round(bytesThisSecond / receivedThisSecond) : 0
   receivedLabel.textContent =
-    `${plural(received, 'image reçue', 'images reçues')} par seconde, ${plural(skipped, 'sautée', 'sautées')}`
+    `${plural(received, 'image reçue', 'images reçues')} par seconde, ${plural(skipped, 'sautée', 'sautées')}, ` +
+    `${averageSize.toLocaleString('fr-FR')} octets par image`
   receivedThisSecond = 0
   skippedThisSecond = 0
+  bytesThisSecond = 0
 
   const reception = receptionLatency.flush()
   const screen = screenLatency.flush()
@@ -152,6 +176,7 @@ function formatClock(seconds: number) {
 
 const connection = connect(SERVER_URL, {
   onMessage,
+  onBinary,
   onStatus: (status) => {
     statusLabel.textContent = STATUS_LABELS[status]
     // Le serveur oublie tout d'un client à sa déconnexion : c'est au client de
@@ -173,6 +198,12 @@ rateSelect.addEventListener('change', () => {
 
 smoothingCheckbox.addEventListener('change', () => {
   smoothing = smoothingCheckbox.checked
+})
+
+// Changer de format, c'est ouvrir une autre connexion : on recharge la page
+formatSelect.value = BINARY ? 'binary' : 'json'
+formatSelect.addEventListener('change', () => {
+  location.search = formatSelect.value === 'binary' ? '?format=binary' : ''
 })
 
 slowClientCheckbox.addEventListener('change', () => {

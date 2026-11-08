@@ -51,6 +51,9 @@ public class MatchReplay {
 	 */
 	private TrackingReader reader;
 
+	/** Prêt avant le démarrage de l'horloge, jamais modifié ensuite. */
+	private BinaryFrameEncoder binaryEncoder;
+
 	/** Spring fournit le JsonMapper (Jackson 3) qu'il configure lui-même. */
 	public MatchReplay(PitchLiveProperties properties, FrameBroadcaster broadcaster, JsonMapper json) {
 		this.properties = properties;
@@ -68,6 +71,7 @@ public class MatchReplay {
 		reader = openReader();
 		Pitch pitch = new Pitch(TrackingReader.PITCH_LENGTH, TrackingReader.PITCH_WIDTH);
 		broadcaster.setPresentation(json.writeValueAsString(new MatchMessage(pitch, reader.profiles())));
+		binaryEncoder = new BinaryFrameEncoder(reader.profiles());
 	}
 
 	/** Démarre quand l'application est entièrement prête, Tomcat compris. */
@@ -109,9 +113,14 @@ public class MatchReplay {
 	}
 
 	private void publish(Frame frame) {
-		// Le JSON est produit une fois par image, ici, et non une fois par client :
-		// avec cent clients, on sérialise toujours 25 fois par seconde, pas 2 500.
-		broadcaster.publish(json.writeValueAsString(new FrameMessage(epochMillis(Instant.now()), frame)));
+		// Chaque format est produit une fois par image, ici, et non une fois par client :
+		// avec cent clients, on encode toujours 25 fois par seconde, pas 2 500. Le binaire
+		// est encodé même si aucun client ne le demande : 135 octets, c'est plus simple
+		// que de tenir le compte des formats demandés.
+		double sentAt = epochMillis(Instant.now());
+		broadcaster.publish(new EncodedFrame(
+				json.writeValueAsString(new FrameMessage(sentAt, frame)),
+				binaryEncoder.encode(sentAt, frame)));
 
 		if (frame.id() % (25 * 60) == 0) {
 			log.info("Minute {} du match", frame.id() / (25 * 60));

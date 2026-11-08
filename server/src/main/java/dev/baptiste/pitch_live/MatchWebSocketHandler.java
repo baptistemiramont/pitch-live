@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -36,7 +37,8 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 
 	@Override
 	public void afterConnectionEstablished(WebSocketSession session) {
-		broadcaster.connect(session.getId(), new SessionChannel(session));
+		String query = session.getUri() == null ? null : session.getUri().getQuery();
+		broadcaster.connect(session.getId(), new SessionChannel(session), FrameFormat.fromQuery(query));
 	}
 
 	/**
@@ -66,8 +68,13 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 	private record SessionChannel(WebSocketSession session) implements ClientChannel {
 
 		@Override
-		public void send(String message) throws IOException {
+		public void sendText(String message) throws IOException {
 			session.sendMessage(new TextMessage(message));
+		}
+
+		@Override
+		public void sendBinary(byte[] message) throws IOException {
+			session.sendMessage(new BinaryMessage(message));
 		}
 
 		@Override

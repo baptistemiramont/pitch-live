@@ -4,7 +4,9 @@ import type { ClientMessage, ServerMessage } from './protocol.ts'
 export type ConnectionStatus = 'connecting' | 'open' | 'closed'
 
 type Listeners = {
-  onMessage: (message: ServerMessage, receivedAt: number) => void
+  /** size : la taille du message décodé, en octets (pas sa taille compressée sur le réseau). */
+  onMessage: (message: ServerMessage, receivedAt: number, size: number) => void
+  onBinary: (data: ArrayBuffer, receivedAt: number) => void
   onStatus: (status: ConnectionStatus) => void
 }
 
@@ -25,6 +27,8 @@ export function connect(url: string, listeners: Listeners) {
   const open = () => {
     listeners.onStatus('connecting')
     socket = new WebSocket(url)
+    // Les messages binaires arrivent en ArrayBuffer, que DataView sait lire directement
+    socket.binaryType = 'arraybuffer'
 
     socket.onopen = () => {
       retryDelay = FIRST_RETRY_MS
@@ -32,9 +36,14 @@ export function connect(url: string, listeners: Listeners) {
     }
 
     socket.onmessage = (event) => {
-      // L'heure de réception est prise avant JSON.parse, pour ne pas compter le décodage
+      // L'heure de réception est prise avant le décodage, pour ne pas le compter
       const receivedAt = now()
-      listeners.onMessage(JSON.parse(event.data), receivedAt)
+      if (typeof event.data === 'string') {
+        // Le JSON du serveur ne contient que de l'ASCII : un caractère, un octet
+        listeners.onMessage(JSON.parse(event.data), receivedAt, event.data.length)
+      } else {
+        listeners.onBinary(event.data, receivedAt)
+      }
     }
 
     socket.onclose = () => {

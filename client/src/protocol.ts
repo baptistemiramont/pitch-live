@@ -1,6 +1,7 @@
 // Le contrat entre le serveur et le navigateur.
-// Miroir de server/src/main/java/dev/baptiste/pitch_live/Protocol.java : toute
-// modification là-bas doit être reportée ici, à la main.
+// Miroir de server/src/main/java/dev/baptiste/pitch_live/Protocol.java (et de
+// BinaryFrameEncoder.java pour le format binaire) : toute modification là-bas doit
+// être reportée ici, à la main.
 
 export const PROTOCOL_VERSION = 1
 
@@ -38,3 +39,37 @@ export type ServerMessage = MatchMessage | FrameMessage
 export type RateRequest = { v: number; type: 'rate'; fps: number }
 
 export type ClientMessage = RateRequest
+
+/**
+ * Décode une image reçue en binaire (connexion ouverte avec ?format=binary).
+ * BinaryFrameEncoder.java décrit la disposition octet par octet. DataView lit en
+ * big-endian par défaut, comme ByteBuffer écrit en Java. Les joueurs y sont désignés
+ * par leur rang dans la feuille de match reçue à la connexion.
+ * Renvoie null pour un type de message inconnu.
+ */
+export function decodeBinaryFrame(data: ArrayBuffer, roster: PlayerProfile[]): FrameMessage | null {
+  const view = new DataView(data)
+  if (view.getUint8(1) !== 1) {
+    return null
+  }
+  const players: Player[] = []
+  for (let i = 0; i < view.getUint8(24); i++) {
+    const offset = 25 + 5 * i
+    players.push({
+      id: roster[view.getUint8(offset)].id,
+      position: { x: view.getInt16(offset + 1) / 100, y: view.getInt16(offset + 3) / 100 },
+    })
+  }
+  return {
+    v: view.getUint8(0),
+    type: 'frame',
+    sentAt: view.getFloat64(2),
+    frame: {
+      id: view.getUint32(10),
+      period: view.getUint8(14),
+      time: view.getUint32(15) / 1000,
+      players,
+      ball: view.getUint8(19) === 1 ? { x: view.getInt16(20) / 100, y: view.getInt16(22) / 100 } : null,
+    },
+  }
+}
