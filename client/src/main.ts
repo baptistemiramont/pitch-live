@@ -14,7 +14,11 @@ import { interpolate, type ReceivedFrame, type ShownFrame } from './smoothing.ts
 
 // Le format se choisit à la connexion, par l'adresse de la page : ?format=binary
 const BINARY = new URLSearchParams(location.search).get('format') === 'binary'
-const SERVER_URL = `ws://${location.hostname}:8080/match${BINARY ? '?format=binary' : ''}`
+
+// Par défaut, le serveur tourne sur le port 8080 de la machine qui sert la page.
+// VITE_SERVER_URL permet d'en viser un autre : un serveur de test, un déploiement.
+const SERVER_URL =
+  (import.meta.env.VITE_SERVER_URL ?? `ws://${location.hostname}:8080/match`) + (BINARY ? '?format=binary' : '')
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connecting: 'Connexion…',
