@@ -101,7 +101,9 @@ function render() {
 
 // Le bandeau du haut n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
 setInterval(() => {
-  receivedLabel.textContent = `${receivedThisSecond} images reçues par seconde, ${skippedThisSecond} sautées`
+  receivedLabel.textContent =
+    `${plural(receivedThisSecond, 'image reçue', 'images reçues')} par seconde, ` +
+    `${plural(skippedThisSecond, 'sautée', 'sautées')}`
   receivedThisSecond = 0
   skippedThisSecond = 0
 
@@ -121,6 +123,11 @@ setInterval(() => {
     clockLabel.textContent = `Période ${period} · ${formatClock(time)}${ball ? '' : ' · ballon absent'}`
   }
 }, 1000)
+
+/** En français, 0 et 1 sont au singulier. */
+function plural(count: number, singular: string, pluralForm: string) {
+  return `${count} ${count > 1 ? pluralForm : singular}`
+}
 
 function formatMs(milliseconds: number) {
   return `${milliseconds.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms`
