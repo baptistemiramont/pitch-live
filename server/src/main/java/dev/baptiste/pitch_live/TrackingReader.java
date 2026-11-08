@@ -9,20 +9,20 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Lit en parallèle les deux fichiers de suivi de Metrica (domicile et extérieur),
- * une ligne de chacun à la fois, et en fait une {@link Frame}.
+ * Reads Metrica's two tracking files (home and away) side by side, one line of each
+ * at a time, and turns them into a {@link Frame}.
  *
- * Le match n'est jamais chargé en mémoire : le lecteur ne garde qu'une ligne par
- * fichier. C'est aussi la seule classe qui connaît le format de Metrica ; le reste
- * du serveur ne manipule que des Frame en mètres.
+ * The match is never loaded into memory: the reader only holds one line per file.
+ * It is also the only class that knows Metrica's format; the rest of the server only
+ * deals with frames in metres.
  */
 public class TrackingReader implements AutoCloseable {
 
-	/** Dimensions du terrain des matchs d'exemple, d'après le README de Metrica. */
+	/** Pitch dimensions of the sample matches, according to Metrica's README. */
 	public static final double PITCH_LENGTH = 105.0;
 	public static final double PITCH_WIDTH = 68.0;
 
-	/** Chaque ligne commence par trois colonnes fixes : Period, Frame, Time [s]. */
+	/** Every line starts with three fixed columns: Period, Frame, Time [s]. */
 	private static final int FIRST_PLAYER_COLUMN = 3;
 
 	private final BufferedReader home;
@@ -35,8 +35,8 @@ public class TrackingReader implements AutoCloseable {
 		try {
 			away = Files.newBufferedReader(awayFile);
 		} catch (IOException e) {
-			// Sans ce try, un échec sur le second fichier laisserait le premier ouvert :
-			// l'appelant ne reçoit jamais l'objet, il ne peut donc pas appeler close().
+			// Without this try, a failure on the second file would leave the first one
+			// open: the caller never gets the object, so it can never call close().
 			home.close();
 			throw e;
 		}
@@ -44,14 +44,14 @@ public class TrackingReader implements AutoCloseable {
 		awayProfiles = readHeader(away, Team.AWAY);
 	}
 
-	/** Les joueurs des deux équipes, remplaçants compris : la feuille de match. */
+	/** The players of both teams, substitutes included: the roster. */
 	public List<PlayerProfile> profiles() {
 		List<PlayerProfile> all = new ArrayList<>(homeProfiles);
 		all.addAll(awayProfiles);
 		return List.copyOf(all);
 	}
 
-	/** L'image suivante, ou rien quand le match est fini. */
+	/** The next frame, or nothing once the match is over. */
 	public Optional<Frame> next() throws IOException {
 		String homeLine = home.readLine();
 		String awayLine = away.readLine();
@@ -61,19 +61,19 @@ public class TrackingReader implements AutoCloseable {
 
 		String[] homeColumns = homeLine.split(",");
 		String[] awayColumns = awayLine.split(",");
-		// Les deux fichiers sont alignés ligne à ligne. On le vérifie au lieu de le supposer :
-		// un décalage produirait des images fausses sans la moindre erreur visible.
+		// The two files are aligned line by line. We check it instead of assuming it:
+		// an offset would produce wrong frames without any visible error.
 		if (!homeColumns[1].equals(awayColumns[1])) {
-			throw new IOException("Fichiers désalignés : image " + homeColumns[1]
-					+ " à domicile, image " + awayColumns[1] + " à l'extérieur");
+			throw new IOException("Misaligned files: frame " + homeColumns[1]
+					+ " at home, frame " + awayColumns[1] + " away");
 		}
 
 		List<Player> players = new ArrayList<>();
 		addPlayersOnPitch(homeColumns, homeProfiles, players);
 		addPlayersOnPitch(awayColumns, awayProfiles, players);
 
-		// Le ballon figure dans les deux fichiers, avec les mêmes valeurs : on le lit à domicile.
-		// Il vaut NaN sur 39 % du match ; il est alors absent (null), jamais inventé.
+		// The ball is in both files, with the same values: we read it from the home file.
+		// It is NaN for 39% of the match; it is then missing (null), never made up.
 		Position ball = position(homeColumns, FIRST_PLAYER_COLUMN + 2 * homeProfiles.size()).orElse(null);
 
 		return Optional.of(new Frame(
@@ -94,9 +94,9 @@ public class TrackingReader implements AutoCloseable {
 	}
 
 	/**
-	 * Lit les trois lignes d'en-tête : l'équipe (ligne 1, déjà connue), les numéros
-	 * de maillot (ligne 2) et les noms de colonnes (ligne 3). Chaque joueur occupe deux
-	 * colonnes, x puis y, et seule la première porte son nom.
+	 * Reads the three header lines: the team (line 1, already known), the shirt numbers
+	 * (line 2) and the column names (line 3). Each player takes two columns, x then y,
+	 * and only the first one carries the player's name.
 	 */
 	private static List<PlayerProfile> readHeader(BufferedReader reader, Team team) throws IOException {
 		reader.readLine();
@@ -110,7 +110,7 @@ public class TrackingReader implements AutoCloseable {
 		return profiles;
 	}
 
-	/** Ajoute les joueurs présents ; un joueur à NaN (remplaçant, remplacé) est laissé de côté. */
+	/** Adds the players on the pitch; a player at NaN (substitute, substituted) is left out. */
 	private static void addPlayersOnPitch(String[] columns, List<PlayerProfile> profiles, List<Player> players) {
 		for (int i = 0; i < profiles.size(); i++) {
 			String id = profiles.get(i).id();
@@ -119,7 +119,7 @@ public class TrackingReader implements AutoCloseable {
 		}
 	}
 
-	/** Convertit une paire de colonnes (x, y) de 0..1 en mètres, ou rien si Metrica a écrit NaN. */
+	/** Converts a pair of columns (x, y) from 0..1 to metres, or nothing if Metrica wrote NaN. */
 	private static Optional<Position> position(String[] columns, int xColumn) {
 		double x = Double.parseDouble(columns[xColumn]);
 		double y = Double.parseDouble(columns[xColumn + 1]);
@@ -130,10 +130,10 @@ public class TrackingReader implements AutoCloseable {
 	}
 
 	/**
-	 * Arrondit au centimètre. Le suivi n'est pas plus précis, et les décimales en plus
-	 * ne sont que du bruit de calcul (0.7434000000000001) qui alourdit chaque image :
-	 * mesuré sur les 100 premières images, 1 487 octets en moyenne avant l'arrondi,
-	 * 1 240 après (17 % de moins).
+	 * Rounds to the centimetre. Tracking is not more accurate than that, and the extra
+	 * decimals are just floating-point noise (0.7434000000000001) that makes every frame
+	 * heavier: measured over the first 100 frames, 1,487 bytes on average before rounding,
+	 * 1,240 after (17% less).
 	 */
 	private static double toCentimetres(double metres) {
 		return Math.round(metres * 100) / 100.0;

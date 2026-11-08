@@ -9,11 +9,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Distribue chaque image à tous les clients connectés.
+ * Fans every frame out to all connected clients.
  *
- * Trois sortes de threads s'y croisent : le thread d'horloge publie, les threads
- * de Tomcat connectent et déconnectent les clients, et chaque client a son thread
- * d'envoi. Tout l'état partagé est donc dans des structures prévues pour ça.
+ * Three kinds of threads meet here: the clock thread publishes, Tomcat threads connect
+ * and disconnect clients, and every client has its own sender thread. All the shared
+ * state therefore lives in structures designed for it.
  */
 @Component
 public class FrameBroadcaster {
@@ -21,19 +21,19 @@ public class FrameBroadcaster {
 	private static final Logger log = LoggerFactory.getLogger(FrameBroadcaster.class);
 
 	/**
-	 * ConcurrentHashMap et non HashMap : l'horloge parcourt la map pendant que Tomcat
-	 * y ajoute ou en retire des clients. Une HashMap pourrait lever une
-	 * ConcurrentModificationException, ou pire, se corrompre sans rien dire.
+	 * ConcurrentHashMap, not HashMap: the clock iterates over the map while Tomcat adds
+	 * or removes clients. A HashMap could throw a ConcurrentModificationException, or
+	 * worse, corrupt itself silently.
 	 */
 	private final Map<String, ClientConnection> clients = new ConcurrentHashMap<>();
 
-	/** La dernière image publiée, pour qu'un nouveau client voie le terrain tout de suite. */
+	/** The latest published frame, so that a new client sees the pitch right away. */
 	private final AtomicReference<EncodedFrame> lastFrame = new AtomicReference<>();
 
 	/**
-	 * Écrit une fois au démarrage, lu ensuite par les threads de Tomcat. volatile
-	 * garantit que ces autres threads voient bien la valeur écrite, et pas une
-	 * ancienne copie restée dans le cache d'un cœur du processeur.
+	 * Written once at startup, then read by Tomcat threads. volatile guarantees that
+	 * those other threads see the written value, and not a stale copy left in the cache
+	 * of a CPU core.
 	 */
 	private volatile String presentation;
 
@@ -41,7 +41,7 @@ public class FrameBroadcaster {
 		this.presentation = presentation;
 	}
 
-	/** Appelé par le thread d'horloge, 25 fois par seconde : ne bloque jamais. */
+	/** Called by the clock thread, 25 times per second: never blocks. */
 	void publish(EncodedFrame frame) {
 		lastFrame.set(frame);
 		for (ClientConnection client : clients.values()) {
@@ -51,22 +51,22 @@ public class FrameBroadcaster {
 
 	public void connect(String id, ClientChannel channel, FrameFormat format) {
 		ClientConnection client = new ClientConnection(id, channel, presentation, format);
-		// La dernière image est déposée avant l'inscription : l'horloge ne peut pas
-		// encore écrire dans cette boîte, aucun risque d'écraser une image plus récente.
+		// The latest frame is dropped in before registration: the clock cannot write to
+		// this mailbox yet, so there is no risk of overwriting a more recent frame.
 		EncodedFrame last = lastFrame.get();
 		if (last != null) {
 			client.offer(last);
 		}
 		clients.put(id, client);
 		client.start();
-		log.info("Client {} connecté en {} ({} en tout)", id, format, clients.size());
+		log.info("Client {} connected in {} ({} in total)", id, format, clients.size());
 	}
 
 	public void setRate(String id, int framesPerSecond) {
 		ClientConnection client = clients.get(id);
 		if (client != null) {
 			client.setRate(framesPerSecond);
-			log.info("Client {} : {} images par seconde", id, Math.min(framesPerSecond, 25));
+			log.info("Client {}: {} frames per second", id, Math.min(framesPerSecond, 25));
 		}
 	}
 
@@ -74,7 +74,7 @@ public class FrameBroadcaster {
 		ClientConnection client = clients.remove(id);
 		if (client != null) {
 			client.stop();
-			log.info("Client {} déconnecté ({} en tout)", id, clients.size());
+			log.info("Client {} disconnected ({} in total)", id, clients.size());
 		}
 	}
 }

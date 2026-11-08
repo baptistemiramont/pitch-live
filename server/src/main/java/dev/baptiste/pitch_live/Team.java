@@ -1,6 +1,6 @@
 package dev.baptiste.pitch_live;
 
-/** Les deux équipes d'un match, comme Metrica les sépare : un fichier par équipe. */
+/** The two teams of a match, as Metrica splits them: one file per team. */
 public enum Team {
 	HOME,
 	AWAY

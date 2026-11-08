@@ -3,11 +3,11 @@ package dev.baptiste.pitch_live;
 import java.io.IOException;
 
 /**
- * Ce dont la diffusion a besoin d'un client : lui envoyer un message, et couper.
+ * What the broadcast needs from a client: send it a message, and hang up.
  *
- * En production, c'est une session WebSocket (voir MatchWebSocketHandler). Dans les
- * tests, c'est un faux client qu'on peut rendre lent à volonté, sans navigateur.
- * Les envois peuvent bloquer tant que le client ne lit pas.
+ * In production, this is a WebSocket session (see MatchWebSocketHandler). In tests,
+ * it is a fake client that can be made as slow as we like, without a browser.
+ * Sends may block for as long as the client is not reading.
  */
 public interface ClientChannel {
 

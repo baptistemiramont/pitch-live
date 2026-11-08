@@ -1,10 +1,10 @@
 package dev.baptiste.pitch_live;
 
 /**
- * Ce qu'on sait d'un joueur indépendamment de l'instant : son équipe et son numéro.
+ * What we know about a player regardless of the moment: their team and shirt number.
  *
- * Les profils partent une seule fois, dans le message de présentation du match.
- * Les images ne portent que l'identifiant, pour rester légères à 25 envois par seconde.
+ * Profiles are sent once, in the match presentation (the roster). Frames only carry
+ * the player id, to stay light at 25 messages per second.
  */
 public record PlayerProfile(String id, Team team, int number) {
 }

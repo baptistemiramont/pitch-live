@@ -22,8 +22,8 @@ import jakarta.annotation.PreDestroy;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * L'horloge du rejeu : une image toutes les 40 ms, soit 25 par seconde, comme le
- * match a été filmé. Quand le match se termine, il reprend au coup d'envoi.
+ * The replay clock: one frame every 40 ms, that is 25 per second, as the match was
+ * recorded. When the match ends, it starts again from kick-off.
  */
 @Component
 public class MatchReplay {
@@ -37,24 +37,24 @@ public class MatchReplay {
 	private final JsonMapper json;
 
 	/**
-	 * Un seul thread, dédié et nommé (on le retrouve dans jcmd Thread.print).
-	 * C'est un thread classique et non virtuel : il tourne en continu et sa
-	 * régularité compte, alors que les threads virtuels servent à attendre
-	 * beaucoup de choses à la fois à moindre coût.
+	 * A single, dedicated and named thread (it shows up in jcmd Thread.print).
+	 * It is a platform thread, not a virtual one: it runs all the time and its
+	 * regularity matters, whereas virtual threads are for waiting on many things
+	 * at once, cheaply.
 	 */
 	private final ScheduledExecutorService clock =
 			Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("replay-clock").factory());
 
 	/**
-	 * Confiné au thread d'horloge : seul lui le lit ou le remplace une fois le rejeu
-	 * lancé. Pas besoin de verrou pour un état qu'un seul thread touche.
+	 * Confined to the clock thread: once the replay has started, only that thread reads
+	 * or replaces it. No lock is needed for state that a single thread touches.
 	 */
 	private TrackingReader reader;
 
-	/** Prêt avant le démarrage de l'horloge, jamais modifié ensuite. */
+	/** Ready before the clock starts, never modified afterwards. */
 	private BinaryFrameEncoder binaryEncoder;
 
-	/** Spring fournit le JsonMapper (Jackson 3) qu'il configure lui-même. */
+	/** Spring provides the JsonMapper (Jackson 3) it configures itself. */
 	public MatchReplay(PitchLiveProperties properties, FrameBroadcaster broadcaster, JsonMapper json) {
 		this.properties = properties;
 		this.broadcaster = broadcaster;
@@ -62,9 +62,9 @@ public class MatchReplay {
 	}
 
 	/**
-	 * Ouvre le match et prépare la présentation pendant la création des beans,
-	 * avant que Tomcat n'accepte la moindre connexion : un client ne peut pas
-	 * arriver avant que la présentation existe.
+	 * Opens the match and prepares the presentation while the beans are being created,
+	 * before Tomcat accepts any connection: no client can arrive before the presentation
+	 * exists.
 	 */
 	@PostConstruct
 	public void open() throws IOException {
@@ -74,15 +74,15 @@ public class MatchReplay {
 		binaryEncoder = new BinaryFrameEncoder(reader.profiles());
 	}
 
-	/** Démarre quand l'application est entièrement prête, Tomcat compris. */
+	/** Starts once the application is fully ready, Tomcat included. */
 	@EventListener(ApplicationReadyEvent.class)
 	public void start() {
-		// scheduleAtFixedRate vise 0, 40, 80, 120 ms… depuis le départ : un retard
-		// ponctuel est rattrapé et le rythme ne dérive pas. scheduleWithFixedDelay
-		// attendrait 40 ms après la fin de chaque image, et le temps de traitement
-		// s'ajouterait à chaque tour : le match prendrait du retard sur l'horloge.
+		// scheduleAtFixedRate aims at 0, 40, 80, 120 ms… from the start: an occasional
+		// delay is caught up and the rate does not drift. scheduleWithFixedDelay would
+		// wait 40 ms after the end of each frame, and the processing time would add up
+		// on every tick: the match would fall behind the clock.
 		clock.scheduleAtFixedRate(this::tick, 0, FRAME_INTERVAL_MS, TimeUnit.MILLISECONDS);
-		log.info("Rejeu démarré, une image toutes les {} ms", FRAME_INTERVAL_MS);
+		log.info("Replay started, one frame every {} ms", FRAME_INTERVAL_MS);
 	}
 
 	@PreDestroy
@@ -95,39 +95,39 @@ public class MatchReplay {
 	}
 
 	private void tick() {
-		// Piège classique : une exception qui s'échappe d'une tâche planifiée annule
-		// en silence toutes les exécutions suivantes. Le match se figerait sans un
-		// mot dans les logs, d'où ce try qui attrape tout.
+		// Classic pitfall: an exception escaping a scheduled task silently cancels every
+		// following run. The match would freeze without a word in the logs, hence this
+		// catch-all try.
 		try {
 			Optional<Frame> frame = reader.next();
 			if (frame.isEmpty()) {
-				log.info("Fin du match, reprise au coup d'envoi");
+				log.info("End of the match, restarting from kick-off");
 				reader.close();
 				reader = openReader();
 				frame = reader.next();
 			}
 			frame.ifPresent(this::publish);
 		} catch (Exception e) {
-			log.error("Image perdue", e);
+			log.error("Frame lost", e);
 		}
 	}
 
 	private void publish(Frame frame) {
-		// Chaque format est produit une fois par image, ici, et non une fois par client :
-		// avec cent clients, on encode toujours 25 fois par seconde, pas 2 500. Le binaire
-		// est encodé même si aucun client ne le demande : 135 octets, c'est plus simple
-		// que de tenir le compte des formats demandés.
+		// Each format is produced once per frame, here, and not once per client: with a
+		// hundred clients, we still encode 25 times per second, not 2,500. The binary
+		// format is encoded even if no client asks for it: 135 bytes is simpler than
+		// keeping track of the formats in use.
 		double sentAt = epochMillis(Instant.now());
 		broadcaster.publish(new EncodedFrame(
 				json.writeValueAsString(new FrameMessage(sentAt, frame)),
 				binaryEncoder.encode(sentAt, frame)));
 
 		if (frame.id() % (25 * 60) == 0) {
-			log.info("Minute {} du match", frame.id() / (25 * 60));
+			log.info("Minute {} of the match", frame.id() / (25 * 60));
 		}
 	}
 
-	/** Millisecondes depuis 1970, avec les décimales : le format de Date.now() côté navigateur. */
+	/** Milliseconds since 1970, with decimals: the scale of Date.now() in the browser. */
 	private static double epochMillis(Instant instant) {
 		return instant.getEpochSecond() * 1000.0 + instant.getNano() / 1_000_000.0;
 	}

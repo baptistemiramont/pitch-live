@@ -1,12 +1,11 @@
 package dev.baptiste.pitch_live;
 
 /**
- * Une image déjà encodée dans les deux formats, une seule fois par image, quel que
- * soit le nombre de clients.
+ * A frame already encoded in both formats: once per frame, whatever the number of clients.
  *
- * Attention : un tableau dans un record reste modifiable, le record ne protège que la
- * référence. Celui-ci est partagé entre les threads d'envoi de tous les clients ; il
- * n'est jamais modifié après l'encodage, et c'est ce qui le rend sûr.
+ * Beware: an array inside a record stays mutable, the record only protects the reference.
+ * This one is shared by the sender threads of every client; it is never modified after
+ * encoding, and that is what makes sharing it safe.
  */
 public record EncodedFrame(String json, byte[] binary) {
 }

@@ -7,7 +7,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-/** Relit l'encodage champ par champ, comme le fera decodeBinaryFrame dans le navigateur. */
+/** Reads the encoding back field by field, as decodeBinaryFrame will in the browser. */
 class BinaryFrameEncoderTest {
 
 	private final BinaryFrameEncoder encoder = new BinaryFrameEncoder(List.of(
@@ -36,11 +36,11 @@ class BinaryFrameEncoderTest {
 		assertEquals(3400, buffer.getShort());
 
 		assertEquals(2, buffer.get());
-		// Player25 est au rang 2 de la feuille de match
+		// Player25 is ranked 2 in the roster
 		assertEquals(2, buffer.get());
 		assertEquals(10450, buffer.getShort());
 		assertEquals(3420, buffer.getShort());
-		// Une position négative (joueur hors du terrain) passe grâce aux entiers signés
+		// A negative position (player off the pitch) fits thanks to signed integers
 		assertEquals(1, buffer.get());
 		assertEquals(-37, buffer.getShort());
 		assertEquals(6799, buffer.getShort());

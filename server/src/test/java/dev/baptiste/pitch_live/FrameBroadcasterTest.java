@@ -14,8 +14,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * La propriété centrale du serveur : un client lent ne retarde personne, et il
- * reçoit la dernière image plutôt qu'un arriéré.
+ * The core property of the server: a slow client holds nobody back, and it gets the
+ * latest frame rather than a backlog.
  */
 class FrameBroadcasterTest {
 
@@ -40,7 +40,7 @@ class FrameBroadcasterTest {
 		broadcaster.connect("fast", fast, FrameFormat.JSON);
 		broadcaster.connect("slow", slow, FrameFormat.JSON);
 
-		// 20 images, une toutes les 10 ms, comme une horloge accélérée
+		// 20 frames, one every 10 ms, like a sped-up clock
 		long publishingNanos = 0;
 		for (int i = 1; i <= 20; i++) {
 			long start = System.nanoTime();
@@ -49,16 +49,16 @@ class FrameBroadcasterTest {
 			Thread.sleep(10);
 		}
 
-		// Publier n'a jamais attendu le client lent : 20 dépôts en bien moins de 300 ms
+		// Publishing never waited for the slow client: 20 drops in well under 300 ms
 		assertTrue(Duration.ofNanos(publishingNanos).toMillis() < 50,
-				"publish a bloqué " + Duration.ofNanos(publishingNanos).toMillis() + " ms");
+				"publish blocked for " + Duration.ofNanos(publishingNanos).toMillis() + " ms");
 
-		// Le client rapide a presque tout reçu, et le client lent finit sur la dernière image
+		// The fast client got almost everything, and the slow client ends on the latest frame
 		waitUntil(() -> fast.lastReceived().equals("frame-20") && slow.lastReceived().equals("frame-20"));
-		assertTrue(fast.frameCount() >= 15, "le client rapide n'a reçu que " + fast.frameCount() + " images");
+		assertTrue(fast.frameCount() >= 15, "the fast client only got " + fast.frameCount() + " frames");
 
-		// … en sautant presque toutes les autres au lieu de les accumuler
-		assertTrue(slow.frameCount() <= 3, "le client lent a reçu " + slow.frameCount() + " images");
+		// … skipping almost all the others instead of piling them up
+		assertTrue(slow.frameCount() <= 3, "the slow client got " + slow.frameCount() + " frames");
 	}
 
 	@Test
@@ -79,7 +79,7 @@ class FrameBroadcasterTest {
 		broadcaster.connect("fast", fast, FrameFormat.JSON);
 		broadcaster.setRate("fast", 5);
 
-		// 50 images en 500 ms ; à 5 images par seconde, une toutes les 200 ms
+		// 50 frames in 500 ms; at 5 frames per second, one every 200 ms
 		for (int i = 1; i <= 50; i++) {
 			broadcaster.publish(frame(i));
 			Thread.sleep(10);
@@ -87,7 +87,7 @@ class FrameBroadcasterTest {
 
 		waitUntil(() -> fast.lastReceived().equals("frame-50"));
 		assertTrue(fast.frameCount() >= 3 && fast.frameCount() <= 5,
-				"attendu 3 à 5 images, reçu " + fast.frameCount());
+				"expected 3 to 5 frames, got " + fast.frameCount());
 	}
 
 	@Test
@@ -100,12 +100,12 @@ class FrameBroadcasterTest {
 		assertEquals(List.of("match", "binary-7"), binary.received);
 	}
 
-	/** Une image encodée : « frame-i » en JSON, un seul octet i en binaire. */
+	/** An encoded frame: "frame-i" in JSON, a single byte i in binary. */
 	private static EncodedFrame frame(int i) {
 		return new EncodedFrame("frame-" + i, new byte[] { (byte) i });
 	}
 
-	/** Un faux navigateur : il note ce qu'il reçoit, et met readTime à lire chaque message. */
+	/** A fake browser: it records what it receives, and takes readTime to read each message. */
 	private static final class FakeClient implements ClientChannel {
 
 		final List<String> received = new CopyOnWriteArrayList<>();
@@ -151,7 +151,7 @@ class FrameBroadcasterTest {
 		long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
 		while (!condition.getAsBoolean()) {
 			if (System.nanoTime() > deadline) {
-				throw new AssertionError("condition non atteinte en 2 s");
+				throw new AssertionError("condition not met within 2 s");
 			}
 			Thread.onSpinWait();
 		}

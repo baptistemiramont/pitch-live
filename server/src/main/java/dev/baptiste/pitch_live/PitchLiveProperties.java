@@ -5,14 +5,14 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * La configuration propre à pitch-live, lue dans application.properties
- * (les clés qui commencent par pitch-live.).
+ * The pitch-live settings, read from application.properties (the keys starting
+ * with pitch-live.).
  *
- * Un record suffit : Spring passe les valeurs au constructeur, et la configuration
- * ne peut plus changer une fois l'application démarrée.
+ * A record is enough: Spring passes the values to the constructor, and the settings
+ * can no longer change once the application has started.
  *
- * Les chemins restent des chaînes : pour obtenir un Path, Spring passe par ses
- * Resource, qui refusent les chemins relatifs en ../
+ * Paths stay strings: to build a Path, Spring goes through its Resource abstraction,
+ * which rejects relative paths starting with ../
  */
 @ConfigurationProperties("pitch-live")
 public record PitchLiveProperties(String homeFile, String awayFile, List<String> allowedOrigins) {

@@ -9,13 +9,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Un navigateur connecté : une boîte aux lettres d'une place, et un thread virtuel
- * qui en vide le contenu vers le navigateur.
+ * A connected browser: a one-slot mailbox, and a virtual thread that drains it
+ * towards the browser.
  *
- * C'est ici que se règle la question du client lent. L'horloge dépose chaque image
- * dans la boîte sans jamais attendre ; si l'image précédente n'est pas encore partie,
- * elle est remplacée. Un client lent saute donc des images mais reste en direct, et
- * comme chaque client a son propre thread d'envoi, sa lenteur ne bloque que lui.
+ * This is where the slow client problem is solved. The clock drops each frame into
+ * the mailbox without ever waiting; if the previous frame has not left yet, it is
+ * replaced. A slow client therefore skips frames but stays live, and since every
+ * client has its own sender thread, its slowness only blocks itself.
  */
 final class ClientConnection {
 
@@ -27,16 +27,16 @@ final class ClientConnection {
 	private final FrameFormat format;
 
 	/**
-	 * Une seule place : ce n'est pas une file d'attente mais « la dernière image ».
-	 * Une file sans limite ferait prendre au client lent un retard croissant, et
-	 * finirait par remplir la mémoire du serveur.
+	 * A single slot: not a queue but "the latest frame". An unbounded queue would make
+	 * a slow client fall further and further behind, and would end up filling the
+	 * server's memory.
 	 */
 	private final BlockingQueue<EncodedFrame> mailbox = new ArrayBlockingQueue<>(1);
 
 	/**
-	 * L'intervalle minimal entre deux envois ; 0 pour envoyer toutes les images.
-	 * Écrit par un thread de Tomcat quand le navigateur demande une autre fréquence,
-	 * lu par le thread d'envoi : volatile, pour que le second voie ce qu'écrit le premier.
+	 * The minimum interval between two sends; 0 to send every frame. Written by a
+	 * Tomcat thread when the browser asks for another rate, read by the sender thread:
+	 * volatile, so that the latter sees what the former writes.
 	 */
 	private volatile long intervalNanos = 0;
 
@@ -54,8 +54,8 @@ final class ClientConnection {
 	}
 
 	/**
-	 * Dépose une image, en remplaçant celle qui attendait encore. Appelé par le
-	 * thread d'horloge : ne bloque jamais.
+	 * Drops a frame, replacing the one still waiting. Called by the clock thread:
+	 * never blocks.
 	 */
 	void offer(EncodedFrame frame) {
 		while (!mailbox.offer(frame)) {
@@ -63,16 +63,16 @@ final class ClientConnection {
 		}
 	}
 
-	/** Limite le client à framesPerSecond images par seconde ; 25 ou plus, c'est tout envoyer. */
+	/** Limits the client to framesPerSecond frames per second; 25 or more means every frame. */
 	void setRate(int framesPerSecond) {
 		intervalNanos = framesPerSecond >= 25 ? 0 : Duration.ofSeconds(1).toNanos() / framesPerSecond;
 	}
 
 	/**
-	 * Un thread virtuel par client : il passe l'essentiel de son temps bloqué, à
-	 * attendre une image ou que le réseau accepte l'envoi. Un thread virtuel bloqué
-	 * ne coûte presque rien ; mille clients feraient mille threads virtuels, portés
-	 * par une poignée de threads du système.
+	 * One virtual thread per client: it spends most of its time blocked, waiting for a
+	 * frame or for the network to accept a send. A blocked virtual thread costs almost
+	 * nothing; a thousand clients would mean a thousand virtual threads, carried by a
+	 * handful of OS threads.
 	 */
 	void start() {
 		sender = Thread.ofVirtual().name("client-" + id).start(this::run);
@@ -86,29 +86,29 @@ final class ClientConnection {
 
 	private void run() {
 		try {
-			// La présentation part en premier, depuis ce thread : un seul thread
-			// écrit dans la session, les messages ne peuvent pas se croiser.
+			// The presentation goes first, from this thread: a single thread writes to
+			// the session, so messages cannot interleave.
 			channel.sendText(presentation);
 			while (true) {
 				EncodedFrame frame = mailbox.take();
 				long sentAt = System.nanoTime();
 				send(frame);
 
-				// Fréquence réduite : le thread dort jusqu'au prochain envoi permis. Pendant
-				// ce temps, l'horloge continue de remplacer l'image en attente ; au réveil,
-				// c'est donc la plus récente qui part, jamais une image périmée.
+				// Reduced rate: the thread sleeps until the next allowed send. Meanwhile,
+				// the clock keeps replacing the waiting frame; on wake-up, the latest one
+				// goes out, never a stale one.
 				long remaining = intervalNanos - (System.nanoTime() - sentAt);
 				if (remaining > 0) {
 					Thread.sleep(Duration.ofNanos(remaining));
 				}
 			}
 		} catch (InterruptedException e) {
-			// stop() a été appelé : le client s'est déconnecté, le thread s'arrête.
+			// stop() was called: the client disconnected, the thread ends.
 		} catch (IOException e) {
-			// Le navigateur ne lit plus, ou la connexion est rompue. Un client qui ne
-			// lit plus du tout bloque son envoi jusqu'au délai de Tomcat (20 s par
-			// défaut), qui le fait échouer : on coupe.
-			log.info("Envoi impossible au client {}, déconnexion : {}", id, e.getMessage());
+			// The browser no longer reads, or the connection is broken. A client that
+			// stops reading altogether blocks its send until Tomcat's timeout (20 s by
+			// default) makes it fail: we hang up.
+			log.info("Cannot send to client {}, disconnecting: {}", id, e.getMessage());
 			channel.close();
 		}
 	}

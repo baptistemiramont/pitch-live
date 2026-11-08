@@ -13,16 +13,16 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Un test JUnit simple, sans Spring : il s'exécute en une fraction de seconde. */
+/** A plain JUnit test, without Spring: it runs in a fraction of a second. */
 class TrackingReaderTest {
 
-	// Maven lance les tests depuis server/, d'où le ../
+	// Maven runs the tests from server/, hence the ../
 	static final Path HOME = Path.of("../data/Sample_Game_1/Sample_Game_1_RawTrackingData_Home_Team.csv");
 	static final Path AWAY = Path.of("../data/Sample_Game_1/Sample_Game_1_RawTrackingData_Away_Team.csv");
 
 	@BeforeEach
 	void requireData() {
-		assumeTrue(Files.exists(HOME) && Files.exists(AWAY), "Données absentes : lancer make data");
+		assumeTrue(Files.exists(HOME) && Files.exists(AWAY), "Data missing: run make data");
 	}
 
 	@Test
@@ -34,12 +34,12 @@ class TrackingReaderTest {
 			assertEquals(1, frame.period());
 			assertEquals(0.04, frame.time(), 1e-9);
 
-			// 14 colonnes par équipe, dont 3 remplaçants encore à NaN au coup d'envoi
+			// 14 columns per team, including 3 substitutes still at NaN at kick-off
 			assertEquals(22, frame.players().size());
 			assertTrue(frame.players().stream().noneMatch(player -> player.id().equals("Player12")));
 
-			// Les décimaux se comparent avec une tolérance, jamais à l'égalité stricte ;
-			// ici un demi-centimètre, puisque les positions sont arrondies au centimètre
+			// Decimals are compared with a tolerance, never for strict equality;
+			// half a centimetre here, since positions are rounded to the centimetre
 			Position player11 = positionOf(frame, "Player11");
 			assertEquals(0.00082 * 105, player11.x(), 0.005);
 			assertEquals(0.48238 * 68, player11.y(), 0.005);

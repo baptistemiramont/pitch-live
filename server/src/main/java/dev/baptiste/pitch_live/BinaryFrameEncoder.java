@@ -6,38 +6,37 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Encode une image en binaire : 135 octets pour 22 joueurs, contre 1 240 en JSON.
+ * Encodes a frame in binary: 135 bytes for 22 players, against 1,240 in JSON.
  *
- * Disposition, en big-endian (l'ordre par défaut de ByteBuffer en Java et de DataView
- * dans le navigateur) ; miroir de decodeBinaryFrame dans client/src/protocol.ts :
+ * Layout, big-endian (the default byte order of ByteBuffer in Java and of DataView in
+ * the browser); mirrored by decodeBinaryFrame in client/src/protocol.ts:
  *
  * <pre>
- * octet  taille  champ
- *  0     1       version du protocole
- *  1     1       type de message (1 = image)
- *  2     8       sentAt, en millisecondes depuis 1970 (double)
- * 10     4       numéro de l'image
- * 14     1       période
- * 15     4       temps de jeu, en millisecondes
- * 19     1       ballon présent (1) ou absent (0)
- * 20     2       ballon x, en centimètres (entier signé : le ballon peut sortir du terrain)
- * 22     2       ballon y, en centimètres
- * 24     1       nombre de joueurs présents n
- * 25     5 × n   pour chaque joueur : son rang dans la feuille de match (1 octet),
- *                puis x et y en centimètres (2 octets chacun)
+ * offset size   field
+ *  0     1       protocol version
+ *  1     1       message type (1 = frame)
+ *  2     8       sentAt, in milliseconds since 1970 (double)
+ * 10     4       frame number
+ * 14     1       period
+ * 15     4       match time, in milliseconds
+ * 19     1       ball present (1) or missing (0)
+ * 20     2       ball x, in centimetres (signed: the ball can leave the pitch)
+ * 22     2       ball y, in centimetres
+ * 24     1       number of players on the pitch n
+ * 25     5 × n   for each player: their rank in the roster (1 byte),
+ *                then x and y in centimetres (2 bytes each)
  * </pre>
  *
- * Le gain vient de trois choix : plus de noms de champs, le joueur désigné par son rang
- * dans la présentation au lieu de "Player11", et des positions en centimètres sur deux
- * octets au lieu d'un nombre décimal écrit en texte.
+ * The gain comes from three choices: no field names, the player referred to by their
+ * rank in the presentation instead of "Player11", and positions in centimetres on two
+ * bytes instead of a decimal number written out as text.
  *
- * Sur le réseau, l'écart est bien moindre : navigateur et Tomcat négocient par défaut
- * la compression permessage-deflate, qui ramène le JSON à environ 176 octets et le
- * binaire à 126 (estimé en rejouant cette compression sur 250 images). Et elle se fait
- * connexion par connexion, donc une fois par client et par image ; Tomcat l'applique
- * aussi aux messages binaires. Le binaire n'économiserait ce calcul qu'en coupant la
- * compression pour ses clients : il partirait alors tel quel, 135 octets encodés une
- * seule fois pour tous.
+ * On the wire, the difference is much smaller: the browser and Tomcat negotiate the
+ * permessage-deflate compression by default, which brings JSON down to about 176 bytes
+ * and binary to 126 (estimated by replaying that compression over 250 frames). And it
+ * runs per connection, so once per client and per frame; Tomcat applies it to binary
+ * messages too. Binary would only save that CPU by turning compression off for its
+ * clients: it would then go out as is, 135 bytes encoded once for everyone.
  */
 public class BinaryFrameEncoder {
 
@@ -45,7 +44,7 @@ public class BinaryFrameEncoder {
 	private static final int HEADER_SIZE = 25;
 	private static final int PLAYER_SIZE = 5;
 
-	/** Le rang de chaque joueur dans la feuille de match envoyée à la connexion. */
+	/** The rank of each player in the roster sent on connection. */
 	private final Map<String, Integer> rankById = new HashMap<>();
 
 	public BinaryFrameEncoder(List<PlayerProfile> profiles) {
@@ -77,7 +76,7 @@ public class BinaryFrameEncoder {
 		return buffer.array();
 	}
 
-	/** Deux octets signés couvrent ±327 m : largement de quoi décrire un terrain de 105 m. */
+	/** Two signed bytes cover ±327 m: plenty for a 105 m pitch. */
 	private static short centimetres(double metres) {
 		return (short) Math.round(metres * 100);
 	}

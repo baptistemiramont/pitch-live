@@ -16,11 +16,11 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Le point d'entrée WebSocket brut, sans STOMP : on garde la main sur ce qui part
- * vers chaque client, et à quel rythme.
+ * The raw WebSocket endpoint, without STOMP: we keep control over what goes to each
+ * client, and at what rate.
  *
- * Ces méthodes sont appelées par les threads de Tomcat. Elles ne font que brancher
- * et débrancher le client ; les envois se font dans le thread propre à chaque client.
+ * These methods are called by Tomcat threads. They only plug and unplug the client;
+ * the sends happen in each client's own thread.
  */
 @Component
 public class MatchWebSocketHandler extends TextWebSocketHandler {
@@ -42,8 +42,8 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 	}
 
 	/**
-	 * Un message du navigateur. Il vient de l'extérieur : on le valide, et un message
-	 * incompréhensible est ignoré plutôt que de couper la connexion.
+	 * A message from the browser. It comes from outside: we validate it, and a message
+	 * we cannot understand is ignored rather than closing the connection.
 	 */
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) {
@@ -54,9 +54,9 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 				return;
 			}
 		} catch (JacksonException e) {
-			// JSON invalide : traité comme un message inconnu, juste en dessous
+			// Invalid JSON: handled as an unknown message, just below
 		}
-		log.warn("Message ignoré du client {} : {}", session.getId(), message.getPayload());
+		log.warn("Ignored message from client {}: {}", session.getId(), message.getPayload());
 	}
 
 	@Override
@@ -64,7 +64,7 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 		broadcaster.disconnect(session.getId());
 	}
 
-	/** Adapte une session WebSocket de Spring à ce qu'attend la diffusion. */
+	/** Adapts a Spring WebSocket session to what the broadcast expects. */
 	private record SessionChannel(WebSocketSession session) implements ClientChannel {
 
 		@Override
@@ -82,7 +82,7 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 			try {
 				session.close(CloseStatus.SESSION_NOT_RELIABLE);
 			} catch (IOException e) {
-				// La connexion est déjà rompue : rien de plus à faire.
+				// The connection is already broken: nothing more to do.
 			}
 		}
 	}
