@@ -23,6 +23,7 @@ let latest: ReceivedFrame | null = null
 // L'avant-dernière image ne sert qu'au lissage du mouvement
 let previous: ReceivedFrame | null = null
 let smoothing = false
+let slowClient = false
 let receivedThisSecond = 0
 
 // Les images sautées se voient aux trous dans les numéros : à 5 images par seconde,
@@ -45,6 +46,7 @@ const clockLabel = document.querySelector<HTMLElement>('#clock')!
 const receivedLabel = document.querySelector<HTMLElement>('#received')!
 const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
 const smoothingCheckbox = document.querySelector<HTMLInputElement>('#smoothing')!
+const slowClientCheckbox = document.querySelector<HTMLInputElement>('#slow-client')!
 const latencyLabel = document.querySelector<HTMLElement>('#latency')!
 
 // Réception : aucun dessin ici, on garde seulement les deux dernières images.
@@ -62,6 +64,9 @@ function onMessage(message: ServerMessage, receivedAt: number) {
       latest = null
       break
     case 'frame': {
+      if (slowClient) {
+        simulateHeavyWork()
+      }
       const frame = message.frame
       if (latest && frame.id > latest.frame.id + 1) {
         skippedThisSecond += frame.id - latest.frame.id - 1
@@ -100,10 +105,17 @@ function render() {
 }
 
 // Le bandeau du haut n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
+// Les compteurs sont divisés par le temps réellement écoulé : quand la page est
+// surchargée, ce minuteur se déclenche en retard, et pas toutes les secondes.
+let lastHudUpdate = performance.now()
+
 setInterval(() => {
+  const elapsedSeconds = (performance.now() - lastHudUpdate) / 1000
+  lastHudUpdate = performance.now()
+  const received = Math.round(receivedThisSecond / elapsedSeconds)
+  const skipped = Math.round(skippedThisSecond / elapsedSeconds)
   receivedLabel.textContent =
-    `${plural(receivedThisSecond, 'image reçue', 'images reçues')} par seconde, ` +
-    `${plural(skippedThisSecond, 'sautée', 'sautées')}`
+    `${plural(received, 'image reçue', 'images reçues')} par seconde, ${plural(skipped, 'sautée', 'sautées')}`
   receivedThisSecond = 0
   skippedThisSecond = 0
 
@@ -162,5 +174,33 @@ rateSelect.addEventListener('change', () => {
 smoothingCheckbox.addEventListener('change', () => {
   smoothing = smoothingCheckbox.checked
 })
+
+slowClientCheckbox.addEventListener('change', () => {
+  slowClient = slowClientCheckbox.checked
+})
+
+/**
+ * Simule un client lent pour de vrai : chaque image occupe le fil principal 60 ms,
+ * plus que les 40 ms qui les séparent. La page n'en traite que 17 par seconde sur 25.
+ *
+ * Ce que la mesure a montré : le retard grandit sans limite, d'un tiers de seconde
+ * chaque seconde (32 s de retard au bout de 95 s), et le serveur ne saute aucune
+ * image. Sa boîte aux lettres d'une place ne protège que d'un envoi qui bloque ; or
+ * ici l'envoi ne bloque pas. Les images s'entassent dans les tampons entre le serveur
+ * et la page (ceux du système, jusqu'à 4 Mo de chaque côté sur macOS, et ceux du
+ * navigateur) bien avant que le serveur ne ressente quoi que ce soit, et l'API
+ * WebSocket du navigateur n'offre aucun moyen de lui dire de ralentir.
+ *
+ * Les parades : que le client demande lui-même moins d'images (à 10 par seconde, ce
+ * client suit, avec une latence stable autour de 20 ms), ou un contrôle de flux dans
+ * le protocole, où le client accuse réception de chaque image et où le serveur n'en
+ * a jamais plus d'une en route vers lui.
+ */
+function simulateHeavyWork() {
+  const end = performance.now() + 60
+  while (performance.now() < end) {
+    // attente active : rien d'autre ne peut s'exécuter sur la page pendant ce temps
+  }
+}
 
 requestAnimationFrame(render)
