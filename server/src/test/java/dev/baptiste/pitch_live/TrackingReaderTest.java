@@ -38,13 +38,14 @@ class TrackingReaderTest {
 			assertEquals(22, frame.players().size());
 			assertTrue(frame.players().stream().noneMatch(player -> player.id().equals("Player12")));
 
-			// Les décimaux se comparent avec une tolérance, jamais à l'égalité stricte
+			// Les décimaux se comparent avec une tolérance, jamais à l'égalité stricte ;
+			// ici un demi-centimètre, puisque les positions sont arrondies au centimètre
 			Position player11 = positionOf(frame, "Player11");
-			assertEquals(0.00082 * 105, player11.x(), 1e-6);
-			assertEquals(0.48238 * 68, player11.y(), 1e-6);
+			assertEquals(0.00082 * 105, player11.x(), 0.005);
+			assertEquals(0.48238 * 68, player11.y(), 0.005);
 
-			assertEquals(0.45472 * 105, frame.ball().x(), 1e-6);
-			assertEquals(0.38709 * 68, frame.ball().y(), 1e-6);
+			assertEquals(0.45472 * 105, frame.ball().x(), 0.005);
+			assertEquals(0.38709 * 68, frame.ball().y(), 0.005);
 		}
 	}
 
