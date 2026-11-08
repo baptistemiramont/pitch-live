@@ -33,3 +33,8 @@ export type MatchMessage = { v: number; type: 'match'; pitch: Pitch; players: Pl
 export type FrameMessage = { v: number; type: 'frame'; sentAt: number; frame: Frame }
 
 export type ServerMessage = MatchMessage | FrameMessage
+
+/** Envoyé au serveur : ne recevoir que fps images par seconde (de 1 à 25). */
+export type RateRequest = { v: number; type: 'rate'; fps: number }
+
+export type ClientMessage = RateRequest

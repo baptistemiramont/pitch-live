@@ -72,6 +72,23 @@ class FrameBroadcasterTest {
 		assertEquals(List.of("match", "frame-2"), late.received);
 	}
 
+	@Test
+	void aClientCanAskForFewerFramesAndStillGetsTheLatest() throws InterruptedException {
+		FakeClient fast = new FakeClient(Duration.ZERO);
+		broadcaster.connect("fast", fast);
+		broadcaster.setRate("fast", 5);
+
+		// 50 images en 500 ms ; à 5 images par seconde, une toutes les 200 ms
+		for (int i = 1; i <= 50; i++) {
+			broadcaster.publish("frame-" + i);
+			Thread.sleep(10);
+		}
+
+		waitUntil(() -> fast.lastReceived().equals("frame-50"));
+		assertTrue(fast.frameCount() >= 3 && fast.frameCount() <= 5,
+				"attendu 3 à 5 images, reçu " + fast.frameCount());
+	}
+
 	/** Un faux navigateur : il note ce qu'il reçoit, et met readTime à lire chaque message. */
 	private static final class FakeClient implements ClientChannel {
 

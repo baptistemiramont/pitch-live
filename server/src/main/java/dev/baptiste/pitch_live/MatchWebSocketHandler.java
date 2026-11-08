@@ -2,11 +2,17 @@ package dev.baptiste.pitch_live;
 
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import dev.baptiste.pitch_live.Protocol.RateRequest;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Le point d'entrée WebSocket brut, sans STOMP : on garde la main sur ce qui part
@@ -18,15 +24,37 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class MatchWebSocketHandler extends TextWebSocketHandler {
 
-	private final FrameBroadcaster broadcaster;
+	private static final Logger log = LoggerFactory.getLogger(MatchWebSocketHandler.class);
 
-	public MatchWebSocketHandler(FrameBroadcaster broadcaster) {
+	private final FrameBroadcaster broadcaster;
+	private final JsonMapper json;
+
+	public MatchWebSocketHandler(FrameBroadcaster broadcaster, JsonMapper json) {
 		this.broadcaster = broadcaster;
+		this.json = json;
 	}
 
 	@Override
 	public void afterConnectionEstablished(WebSocketSession session) {
 		broadcaster.connect(session.getId(), new SessionChannel(session));
+	}
+
+	/**
+	 * Un message du navigateur. Il vient de l'extérieur : on le valide, et un message
+	 * incompréhensible est ignoré plutôt que de couper la connexion.
+	 */
+	@Override
+	protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+		try {
+			RateRequest request = json.readValue(message.getPayload(), RateRequest.class);
+			if (request.v() == Protocol.VERSION && "rate".equals(request.type()) && request.fps() >= 1) {
+				broadcaster.setRate(session.getId(), request.fps());
+				return;
+			}
+		} catch (JacksonException e) {
+			// JSON invalide : traité comme un message inconnu, juste en dessous
+		}
+		log.warn("Message ignoré du client {} : {}", session.getId(), message.getPayload());
 	}
 
 	@Override

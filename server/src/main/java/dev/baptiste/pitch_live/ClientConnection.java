@@ -1,6 +1,7 @@
 package dev.baptiste.pitch_live;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -31,6 +32,13 @@ final class ClientConnection {
 	 */
 	private final BlockingQueue<String> mailbox = new ArrayBlockingQueue<>(1);
 
+	/**
+	 * L'intervalle minimal entre deux envois ; 0 pour envoyer toutes les images.
+	 * Écrit par un thread de Tomcat quand le navigateur demande une autre fréquence,
+	 * lu par le thread d'envoi : volatile, pour que le second voie ce qu'écrit le premier.
+	 */
+	private volatile long intervalNanos = 0;
+
 	private Thread sender;
 
 	ClientConnection(String id, ClientChannel channel, String presentation) {
@@ -51,6 +59,11 @@ final class ClientConnection {
 		while (!mailbox.offer(frame)) {
 			mailbox.poll();
 		}
+	}
+
+	/** Limite le client à framesPerSecond images par seconde ; 25 ou plus, c'est tout envoyer. */
+	void setRate(int framesPerSecond) {
+		intervalNanos = framesPerSecond >= 25 ? 0 : Duration.ofSeconds(1).toNanos() / framesPerSecond;
 	}
 
 	/**
@@ -75,7 +88,17 @@ final class ClientConnection {
 			// écrit dans la session, les messages ne peuvent pas se croiser.
 			channel.send(presentation);
 			while (true) {
-				channel.send(mailbox.take());
+				String frame = mailbox.take();
+				long sentAt = System.nanoTime();
+				channel.send(frame);
+
+				// Fréquence réduite : le thread dort jusqu'au prochain envoi permis. Pendant
+				// ce temps, l'horloge continue de remplacer l'image en attente ; au réveil,
+				// c'est donc la plus récente qui part, jamais une image périmée.
+				long remaining = intervalNanos - (System.nanoTime() - sentAt);
+				if (remaining > 0) {
+					Thread.sleep(Duration.ofNanos(remaining));
+				}
 			}
 		} catch (InterruptedException e) {
 			// stop() a été appelé : le client s'est déconnecté, le thread s'arrête.

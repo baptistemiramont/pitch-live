@@ -62,6 +62,14 @@ public class FrameBroadcaster {
 		log.info("Client {} connecté ({} en tout)", id, clients.size());
 	}
 
+	public void setRate(String id, int framesPerSecond) {
+		ClientConnection client = clients.get(id);
+		if (client != null) {
+			client.setRate(framesPerSecond);
+			log.info("Client {} : {} images par seconde", id, Math.min(framesPerSecond, 25));
+		}
+	}
+
 	public void disconnect(String id) {
 		ClientConnection client = clients.remove(id);
 		if (client != null) {

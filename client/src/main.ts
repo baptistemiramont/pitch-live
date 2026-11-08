@@ -20,10 +20,17 @@ let profiles = new Map<string, PlayerProfile>()
 let latestFrame: Frame | null = null
 let receivedThisSecond = 0
 
+// Les images sautées se voient aux trous dans les numéros : à 5 images par seconde,
+// le serveur n'envoie qu'une image sur cinq, toujours la plus récente.
+let lastFrameId: number | null = null
+let skippedThisSecond = 0
+let requestedRate = 25
+
 const renderer = new PitchRenderer(document.querySelector<HTMLCanvasElement>('#pitch')!)
 const statusLabel = document.querySelector<HTMLElement>('#status')!
 const clockLabel = document.querySelector<HTMLElement>('#clock')!
 const receivedLabel = document.querySelector<HTMLElement>('#received')!
+const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
 
 // Réception : aucun dessin ici, on garde seulement la dernière image.
 function onMessage(message: ServerMessage) {
@@ -37,6 +44,11 @@ function onMessage(message: ServerMessage) {
       profiles = new Map(message.players.map((player) => [player.id, player]))
       break
     case 'frame':
+      // Un numéro plus petit que le précédent : le match a repris au coup d'envoi
+      if (lastFrameId !== null && message.frame.id > lastFrameId + 1) {
+        skippedThisSecond += message.frame.id - lastFrameId - 1
+      }
+      lastFrameId = message.frame.id
       latestFrame = message.frame
       receivedThisSecond++
       break
@@ -63,8 +75,9 @@ function render() {
 
 // Le bandeau du haut n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
 setInterval(() => {
-  receivedLabel.textContent = `${receivedThisSecond} images reçues par seconde`
+  receivedLabel.textContent = `${receivedThisSecond} images reçues par seconde, ${skippedThisSecond} sautées`
   receivedThisSecond = 0
+  skippedThisSecond = 0
   if (latestFrame) {
     clockLabel.textContent = `Période ${latestFrame.period} · ${formatClock(latestFrame.time)}${latestFrame.ball ? '' : ' · ballon absent'}`
   }
@@ -75,8 +88,25 @@ function formatClock(seconds: number) {
   return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 }
 
-connect(SERVER_URL, {
+const connection = connect(SERVER_URL, {
   onMessage,
-  onStatus: (status) => (statusLabel.textContent = STATUS_LABELS[status]),
+  onStatus: (status) => {
+    statusLabel.textContent = STATUS_LABELS[status]
+    // Le serveur oublie tout d'un client à sa déconnexion : c'est au client de
+    // redemander sa fréquence à chaque nouvelle connexion.
+    if (status === 'open' && requestedRate < 25) {
+      requestRate()
+    }
+  },
 })
+
+function requestRate() {
+  connection.send({ v: PROTOCOL_VERSION, type: 'rate', fps: requestedRate })
+}
+
+rateSelect.addEventListener('change', () => {
+  requestedRate = Number(rateSelect.value)
+  requestRate()
+})
+
 requestAnimationFrame(render)

@@ -1,4 +1,4 @@
-import type { ServerMessage } from './protocol.ts'
+import type { ClientMessage, ServerMessage } from './protocol.ts'
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed'
 
@@ -19,10 +19,11 @@ const MAX_RETRY_MS = 5000
  */
 export function connect(url: string, listeners: Listeners) {
   let retryDelay = FIRST_RETRY_MS
+  let socket: WebSocket | null = null
 
   const open = () => {
     listeners.onStatus('connecting')
-    const socket = new WebSocket(url)
+    socket = new WebSocket(url)
 
     socket.onopen = () => {
       retryDelay = FIRST_RETRY_MS
@@ -41,4 +42,13 @@ export function connect(url: string, listeners: Listeners) {
   }
 
   open()
+
+  return {
+    /** Envoie si la connexion est ouverte ; sinon le message est perdu, d'où le renvoi à chaque connexion. */
+    send(message: ClientMessage) {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(message))
+      }
+    },
+  }
 }

@@ -41,4 +41,8 @@ public final class Protocol {
 			this(VERSION, "frame", sentAt, frame);
 		}
 	}
+
+	/** Reçu du navigateur : il demande à ne recevoir que fps images par seconde (de 1 à 25). */
+	public record RateRequest(int v, String type, int fps) {
+	}
 }
