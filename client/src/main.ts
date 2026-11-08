@@ -1,5 +1,6 @@
 import './style.css'
 import { connect, type ConnectionStatus } from './connection.ts'
+import { LatencyWindow, now } from './latency.ts'
 import { PROTOCOL_VERSION, type Frame, type MatchMessage, type PlayerProfile, type ServerMessage } from './protocol.ts'
 import { PitchRenderer } from './render.ts'
 
@@ -26,14 +27,24 @@ let lastFrameId: number | null = null
 let skippedThisSecond = 0
 let requestedRate = 25
 
+// Deux latences, mesurées depuis la publication par le serveur (sentAt) :
+// - à la réception : file d'attente du serveur, envoi, réseau, boucle d'événements ;
+// - à l'affichage : la même chose, plus l'attente du prochain rafraîchissement de
+//   l'écran (jusqu'à 16,7 ms à 60 Hz). C'est le plus proche du « bout en bout ».
+//   Les pixels n'apparaissent qu'au rafraîchissement suivant, que la page ne voit pas.
+let latestSentAt = 0
+const receptionLatency = new LatencyWindow()
+const displayLatency = new LatencyWindow()
+
 const renderer = new PitchRenderer(document.querySelector<HTMLCanvasElement>('#pitch')!)
 const statusLabel = document.querySelector<HTMLElement>('#status')!
 const clockLabel = document.querySelector<HTMLElement>('#clock')!
 const receivedLabel = document.querySelector<HTMLElement>('#received')!
 const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
+const latencyLabel = document.querySelector<HTMLElement>('#latency')!
 
 // Réception : aucun dessin ici, on garde seulement la dernière image.
-function onMessage(message: ServerMessage) {
+function onMessage(message: ServerMessage, receivedAt: number) {
   if (message.v !== PROTOCOL_VERSION) {
     console.warn(`Message en version ${message.v} ignoré, ce client parle la version ${PROTOCOL_VERSION}`)
     return
@@ -50,6 +61,8 @@ function onMessage(message: ServerMessage) {
       }
       lastFrameId = message.frame.id
       latestFrame = message.frame
+      latestSentAt = message.sentAt
+      receptionLatency.add(receivedAt - message.sentAt)
       receivedThisSecond++
       break
   }
@@ -67,6 +80,9 @@ function render() {
     const resized = renderer.fitToScreen()
     if (resized || latestFrame !== lastDrawn) {
       renderer.draw(match.pitch, profiles, latestFrame)
+      if (latestFrame !== lastDrawn) {
+        displayLatency.add(now() - latestSentAt)
+      }
       lastDrawn = latestFrame
     }
   }
@@ -78,10 +94,21 @@ setInterval(() => {
   receivedLabel.textContent = `${receivedThisSecond} images reçues par seconde, ${skippedThisSecond} sautées`
   receivedThisSecond = 0
   skippedThisSecond = 0
+  const reception = receptionLatency.flush()
+  const display = displayLatency.flush()
+  if (reception && display) {
+    latencyLabel.textContent =
+      `Latence à la réception ${formatMs(reception.average)} (max ${formatMs(reception.max)}), ` +
+      `à l'affichage ${formatMs(display.average)} (max ${formatMs(display.max)})`
+  }
   if (latestFrame) {
     clockLabel.textContent = `Période ${latestFrame.period} · ${formatClock(latestFrame.time)}${latestFrame.ball ? '' : ' · ballon absent'}`
   }
 }, 1000)
+
+function formatMs(milliseconds: number) {
+  return `${milliseconds.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms`
+}
 
 function formatClock(seconds: number) {
   const minutes = Math.floor(seconds / 60)

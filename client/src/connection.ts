@@ -1,9 +1,10 @@
+import { now } from './latency.ts'
 import type { ClientMessage, ServerMessage } from './protocol.ts'
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed'
 
 type Listeners = {
-  onMessage: (message: ServerMessage) => void
+  onMessage: (message: ServerMessage, receivedAt: number) => void
   onStatus: (status: ConnectionStatus) => void
 }
 
@@ -31,7 +32,9 @@ export function connect(url: string, listeners: Listeners) {
     }
 
     socket.onmessage = (event) => {
-      listeners.onMessage(JSON.parse(event.data))
+      // L'heure de réception est prise avant JSON.parse, pour ne pas compter le décodage
+      const receivedAt = now()
+      listeners.onMessage(JSON.parse(event.data), receivedAt)
     }
 
     socket.onclose = () => {
