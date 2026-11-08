@@ -1,60 +1,82 @@
 import './style.css'
-import heroImg from './assets/hero.png'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import { setupCounter } from './counter.ts'
+import { connect, type ConnectionStatus } from './connection.ts'
+import { PROTOCOL_VERSION, type Frame, type MatchMessage, type PlayerProfile, type ServerMessage } from './protocol.ts'
+import { PitchRenderer } from './render.ts'
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const SERVER_URL = `ws://${location.hostname}:8080/match`
 
-<div class="ticks"></div>
+const STATUS_LABELS: Record<ConnectionStatus, string> = {
+  connecting: 'Connexion…',
+  open: 'Connecté',
+  closed: 'Déconnecté, nouvelle tentative…',
+}
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+// L'état partagé entre la réception et le dessin : de simples variables, sans
+// framework. La réception les remplace à chaque message ; le dessin les lit au
+// rythme de l'écran. Avec l'état d'un framework comme React, chaque image (25 par
+// seconde) déclencherait un nouveau rendu de composants pour rien.
+let match: MatchMessage | null = null
+let profiles = new Map<string, PlayerProfile>()
+let latestFrame: Frame | null = null
+let receivedThisSecond = 0
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+const renderer = new PitchRenderer(document.querySelector<HTMLCanvasElement>('#pitch')!)
+const statusLabel = document.querySelector<HTMLElement>('#status')!
+const clockLabel = document.querySelector<HTMLElement>('#clock')!
+const receivedLabel = document.querySelector<HTMLElement>('#received')!
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+// Réception : aucun dessin ici, on garde seulement la dernière image.
+function onMessage(message: ServerMessage) {
+  if (message.v !== PROTOCOL_VERSION) {
+    console.warn(`Message en version ${message.v} ignoré, ce client parle la version ${PROTOCOL_VERSION}`)
+    return
+  }
+  switch (message.type) {
+    case 'match':
+      match = message
+      profiles = new Map(message.players.map((player) => [player.id, player]))
+      break
+    case 'frame':
+      latestFrame = message.frame
+      receivedThisSecond++
+      break
+  }
+}
+
+// Dessin : une fois par rafraîchissement de l'écran (60 fois par seconde en général),
+// et seulement s'il y a du nouveau. Des messages arrivés en rafale entre deux
+// rafraîchissements ne coûtent qu'une affectation chacun : seul le dernier est dessiné.
+// Dans un onglet en arrière-plan, le navigateur suspend requestAnimationFrame : on ne
+// dessine plus, mais la réception continue.
+let lastDrawn: Frame | null = null
+
+function render() {
+  if (match && latestFrame) {
+    const resized = renderer.fitToScreen()
+    if (resized || latestFrame !== lastDrawn) {
+      renderer.draw(match.pitch, profiles, latestFrame)
+      lastDrawn = latestFrame
+    }
+  }
+  requestAnimationFrame(render)
+}
+
+// Le bandeau du haut n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
+setInterval(() => {
+  receivedLabel.textContent = `${receivedThisSecond} images reçues par seconde`
+  receivedThisSecond = 0
+  if (latestFrame) {
+    clockLabel.textContent = `Période ${latestFrame.period} · ${formatClock(latestFrame.time)}${latestFrame.ball ? '' : ' · ballon absent'}`
+  }
+}, 1000)
+
+function formatClock(seconds: number) {
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+}
+
+connect(SERVER_URL, {
+  onMessage,
+  onStatus: (status) => (statusLabel.textContent = STATUS_LABELS[status]),
+})
+requestAnimationFrame(render)
