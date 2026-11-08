@@ -4,7 +4,9 @@ import { LatencyWindow, now } from './latency.ts'
 import {
   PROTOCOL_VERSION,
   decodeBinaryFrame,
+  type EventsMessage,
   type Frame,
+  type MatchEvent,
   type MatchMessage,
   type PlayerProfile,
   type ServerMessage,
@@ -57,6 +59,8 @@ const screenLatency = new LatencyWindow()
 const renderer = new PitchRenderer(document.querySelector<HTMLCanvasElement>('#pitch')!)
 const element = (selector: string) => document.querySelector<HTMLElement>(selector)!
 const statusLabel = element('#status')
+const scoreLabel = element('#score')
+const eventList = element('#events')
 const periodLabel = element('#period')
 const clockLabel = element('#clock')
 const ballLabel = element('#ball')
@@ -101,7 +105,38 @@ function onMessage(message: ServerMessage, receivedAt: number, size: number) {
       bytesThisSecond += size
       break
     }
+    case 'events':
+      showEvents(message)
+      break
   }
+}
+
+const EVENT_LABELS: Record<MatchEvent['kind'], string> = {
+  GOAL: 'Goal',
+  YELLOW_CARD: 'Yellow card',
+  RED_CARD: 'Red card',
+}
+
+// The server sends the whole log each time it changes. Goals and cards are rare, so
+// the list is simply rebuilt in full: no need to work out what is new.
+function showEvents(message: EventsMessage) {
+  scoreLabel.textContent = `${message.score.home} - ${message.score.away}`
+  eventList.replaceChildren(
+    ...message.events.map((event) => {
+      const item = document.createElement('li')
+      item.className = event.kind.toLowerCase().replace('_', '-')
+      const time = document.createElement('span')
+      time.className = 'time'
+      time.textContent = formatClock(event.time)
+      const marker = document.createElement('span')
+      marker.className = 'marker'
+      const player = document.createElement('span')
+      player.className = `player ${event.team.toLowerCase()}`
+      player.textContent = `#${profiles.get(event.player)?.number ?? '?'}`
+      item.append(time, marker, `${EVENT_LABELS[event.kind]} `, player)
+      return item
+    }),
+  )
 }
 
 // A binary frame only makes sense with the roster, received in JSON just before:

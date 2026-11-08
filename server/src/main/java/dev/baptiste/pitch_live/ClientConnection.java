@@ -40,6 +40,9 @@ final class ClientConnection {
 	 */
 	private volatile long intervalNanos = 0;
 
+	/** The version of the event log this browser already has. Confined to the sender thread. */
+	private long sentEventsVersion = -1;
+
 	private Thread sender;
 
 	ClientConnection(String id, ClientChannel channel, String presentation, FrameFormat format) {
@@ -92,6 +95,16 @@ final class ClientConnection {
 			while (true) {
 				EncodedFrame frame = mailbox.take();
 				long sentAt = System.nanoTime();
+
+				// Frames are state: a replaced frame is lost, and nobody cares since a newer
+				// one follows. A goal is an event: it must never be lost. It travels as state
+				// too: every frame carries the whole log of events so far, sent again as soon
+				// as its version changes. A client that skips frames never misses a goal, and
+				// a client that joins late gets the whole log at once.
+				if (frame.events().version() != sentEventsVersion) {
+					channel.sendText(frame.events().json());
+					sentEventsVersion = frame.events().version();
+				}
 				send(frame);
 
 				// Reduced rate: the thread sleeps until the next allowed send. Meanwhile,

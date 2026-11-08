@@ -40,6 +40,20 @@ public final class Protocol {
 		}
 	}
 
+	public record Score(int home, int away) {
+	}
+
+	/**
+	 * Sent on connection, then every time it changes: the score and the goals and cards
+	 * so far. It is the whole log rather than the latest event, so that a client that
+	 * skipped frames, or joined late, still ends up with everything.
+	 */
+	public record EventsMessage(int v, String type, Score score, List<MatchEvent> events) {
+		public EventsMessage(Score score, List<MatchEvent> events) {
+			this(VERSION, "events", score, List.copyOf(events));
+		}
+	}
+
 	/** Received from the browser: it only wants fps frames per second (1 to 25). */
 	public record RateRequest(int v, String type, int fps) {
 	}

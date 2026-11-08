@@ -15,5 +15,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * which rejects relative paths starting with ../
  */
 @ConfigurationProperties("pitch-live")
-public record PitchLiveProperties(String homeFile, String awayFile, List<String> allowedOrigins) {
+public record PitchLiveProperties(String homeFile, String awayFile, String eventsFile, List<String> allowedOrigins) {
 }

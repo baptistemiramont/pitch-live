@@ -33,7 +33,26 @@ export type MatchMessage = { v: number; type: 'match'; pitch: Pitch; players: Pl
 /** Received with every frame; sentAt is the time the server published it, in ms since 1970. */
 export type FrameMessage = { v: number; type: 'frame'; sentAt: number; frame: Frame }
 
-export type ServerMessage = MatchMessage | FrameMessage
+export type MatchEvent = {
+  frame: number
+  period: number
+  /** Match time in seconds, on the same clock as the frames. */
+  time: number
+  team: Team
+  kind: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD'
+  /** The player id, as in the roster. */
+  player: string
+}
+
+/** Received on connection, then whenever it changes: the score and every goal and card so far. */
+export type EventsMessage = {
+  v: number
+  type: 'events'
+  score: { home: number; away: number }
+  events: MatchEvent[]
+}
+
+export type ServerMessage = MatchMessage | FrameMessage | EventsMessage
 
 /** Sent to the server: only send fps frames per second (1 to 25). */
 export type RateRequest = { v: number; type: 'rate'; fps: number }

@@ -5,6 +5,9 @@
   --panel: #161b22;
   --border: #2a313c;
   --muted: #8b949e;
+  /* The same team colours as TEAM_COLORS in render.ts */
+  --home: #e53935;
+  --away: #1e88e5;
 }
 
 html,
@@ -146,4 +149,75 @@ select {
     height: auto;
     min-height: 0;
   }
+}
+
+.home {
+  color: var(--home);
+}
+
+.away {
+  color: var(--away);
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.score strong {
+  color: #e6e6e6;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.events {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events:empty::before {
+  content: 'No goal or card yet';
+  color: var(--muted);
+}
+
+.events li {
+  display: grid;
+  grid-template-columns: 2.75rem 0.75rem auto 1fr;
+  align-items: center;
+  column-gap: 0.4rem;
+}
+
+.events .time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.events .player {
+  font-weight: 600;
+}
+
+/* A ball for a goal, a small card for a booking */
+.events .marker {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #f0f0f0;
+}
+
+.events .yellow-card .marker,
+.events .red-card .marker {
+  width: 0.45rem;
+  height: 0.65rem;
+  border-radius: 1px;
+  background: #fdd835;
+}
+
+.events .red-card .marker {
+  background: #e53935;
 }

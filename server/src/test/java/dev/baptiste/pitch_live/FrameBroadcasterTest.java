@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
  */
 class FrameBroadcasterTest {
 
+	private static final EventLog NO_EVENTS = new EventLog(0, "events-0");
+
 	private final FrameBroadcaster broadcaster = new FrameBroadcaster();
 
 	FrameBroadcasterTest() {
@@ -69,8 +71,8 @@ class FrameBroadcasterTest {
 		FakeClient late = new FakeClient(Duration.ZERO);
 		broadcaster.connect("late", late, FrameFormat.JSON);
 
-		waitUntil(() -> late.received.size() == 2);
-		assertEquals(List.of("match", "frame-2"), late.received);
+		waitUntil(() -> late.received.size() == 3);
+		assertEquals(List.of("match", "events-0", "frame-2"), late.received);
 	}
 
 	@Test
@@ -96,13 +98,35 @@ class FrameBroadcasterTest {
 		broadcaster.connect("binary", binary, FrameFormat.BINARY);
 		broadcaster.publish(frame(7));
 
-		waitUntil(() -> binary.received.size() == 2);
-		assertEquals(List.of("match", "binary-7"), binary.received);
+		waitUntil(() -> binary.received.size() == 3);
+		assertEquals(List.of("match", "events-0", "binary-7"), binary.received);
+	}
+
+	@Test
+	void aSlowClientSkipsFramesButNeverMissesTheLatestEventLog() {
+		FakeClient slow = new FakeClient(Duration.ofMillis(300));
+		broadcaster.connect("slow", slow, FrameFormat.JSON);
+
+		// The log changes twice while the slow client is still busy with the presentation
+		EventLog firstGoal = new EventLog(1, "events-1");
+		EventLog secondGoal = new EventLog(2, "events-2");
+		for (int i = 1; i <= 20; i++) {
+			broadcaster.publish(frame(i, i < 5 ? NO_EVENTS : i < 15 ? firstGoal : secondGoal));
+		}
+
+		waitUntil(() -> slow.lastReceived().equals("frame-20"));
+		int log = slow.received.indexOf("events-2");
+		assertTrue(log >= 0 && log < slow.received.indexOf("frame-20"),
+				"the latest log must arrive, before its frame: " + slow.received);
 	}
 
 	/** An encoded frame: "frame-i" in JSON, a single byte i in binary. */
 	private static EncodedFrame frame(int i) {
-		return new EncodedFrame("frame-" + i, new byte[] { (byte) i });
+		return frame(i, NO_EVENTS);
+	}
+
+	private static EncodedFrame frame(int i, EventLog events) {
+		return new EncodedFrame("frame-" + i, new byte[] { (byte) i }, events);
 	}
 
 	/** A fake browser: it records what it receives, and takes readTime to read each message. */

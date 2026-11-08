@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Downloads the tracking data of one of Metrica Sports' sample matches.
-# Source : https://github.com/metrica-sports/sample-data
+# Downloads the tracking and event data of one of Metrica Sports' sample matches.
+# Source: https://github.com/metrica-sports/sample-data
 # Usage: scripts/download-data.sh [1|2]   (match 1 by default)
 set -euo pipefail
 
@@ -14,8 +14,10 @@ BASE_URL="https://raw.githubusercontent.com/metrica-sports/sample-data/master/da
 DEST="$(cd "$(dirname "$0")/.." && pwd)/data/Sample_Game_${GAME}"
 mkdir -p "$DEST"
 
-for team in Home Away; do
-  file="Sample_Game_${GAME}_RawTrackingData_${team}_Team.csv"
+for file in \
+  "Sample_Game_${GAME}_RawTrackingData_Home_Team.csv" \
+  "Sample_Game_${GAME}_RawTrackingData_Away_Team.csv" \
+  "Sample_Game_${GAME}_RawEventsData.csv"; do
   if [[ -s "$DEST/$file" ]]; then
     echo "Already there: $file"
     continue

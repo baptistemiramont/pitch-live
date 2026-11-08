@@ -9,7 +9,7 @@ help:
 data:
 	./scripts/download-data.sh
 
-server:
+server: data
 	cd server && ./mvnw spring-boot:run
 
 client: client/node_modules
