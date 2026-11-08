@@ -69,6 +69,7 @@ Chaque message porte un numéro de version. Un changement incompatible crée une
 | Rejouer un CSV plutôt qu'utiliser une API publique | Maîtriser la fréquence et travailler le côté serveur | Ce n'est pas du vrai direct |
 | WebSocket plutôt que SSE | Le client peut demander une autre fréquence, et le binaire reste possible | La reconnexion est à gérer soi-même |
 | JSON d'abord | Lisible dans les outils du navigateur | Plus lourd ; le binaire attendra d'avoir mesuré la taille |
+| Positions en mètres, converties par le serveur, origine en haut à gauche et axe y vers le bas | Le contrat ne dépend pas de la source des données, et le repère est celui du canvas | Le serveur connaît le format de Metrica |
 | Ne garder que la dernière image pour chaque client | Un client lent reste en direct au lieu de prendre du retard | Il saute des images |
 | Canvas sans moteur de rendu ni React | 23 points se dessinent sans outil lourd | À revoir avec des trajectoires, des zones ou des cartes de chaleur |
 | Pas d'outil de monorepo | Deux projets simples | Le contrat se tient à la main entre Java et TypeScript |
