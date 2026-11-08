@@ -55,14 +55,20 @@ const receptionLatency = new LatencyWindow()
 const screenLatency = new LatencyWindow()
 
 const renderer = new PitchRenderer(document.querySelector<HTMLCanvasElement>('#pitch')!)
-const statusLabel = document.querySelector<HTMLElement>('#status')!
-const clockLabel = document.querySelector<HTMLElement>('#clock')!
-const receivedLabel = document.querySelector<HTMLElement>('#received')!
+const element = (selector: string) => document.querySelector<HTMLElement>(selector)!
+const statusLabel = element('#status')
+const periodLabel = element('#period')
+const clockLabel = element('#clock')
+const ballLabel = element('#ball')
+const receivedLabel = element('#received')
+const skippedLabel = element('#skipped')
+const sizeLabel = element('#size')
+const receptionLatencyLabel = element('#latency-reception')
+const screenLatencyLabel = element('#latency-screen')
 const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
+const formatSelect = document.querySelector<HTMLSelectElement>('#format')!
 const smoothingCheckbox = document.querySelector<HTMLInputElement>('#smoothing')!
 const slowClientCheckbox = document.querySelector<HTMLInputElement>('#slow-client')!
-const formatSelect = document.querySelector<HTMLSelectElement>('#format')!
-const latencyLabel = document.querySelector<HTMLElement>('#latency')!
 
 // Réception : aucun dessin ici, on garde seulement les deux dernières images.
 function onMessage(message: ServerMessage, receivedAt: number, size: number) {
@@ -129,44 +135,43 @@ function render() {
   requestAnimationFrame(render)
 }
 
-// Le bandeau du haut n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
+// Le panneau n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
 // Les compteurs sont divisés par le temps réellement écoulé : quand la page est
 // surchargée, ce minuteur se déclenche en retard, et pas toutes les secondes.
-let lastHudUpdate = performance.now()
+let lastPanelUpdate = performance.now()
 
 setInterval(() => {
-  const elapsedSeconds = (performance.now() - lastHudUpdate) / 1000
-  lastHudUpdate = performance.now()
-  const received = Math.round(receivedThisSecond / elapsedSeconds)
-  const skipped = Math.round(skippedThisSecond / elapsedSeconds)
-  const averageSize = receivedThisSecond ? Math.round(bytesThisSecond / receivedThisSecond) : 0
-  receivedLabel.textContent =
-    `${plural(received, 'image reçue', 'images reçues')} par seconde, ${plural(skipped, 'sautée', 'sautées')}, ` +
-    `${averageSize.toLocaleString('fr-FR')} octets par image`
+  const elapsedSeconds = (performance.now() - lastPanelUpdate) / 1000
+  lastPanelUpdate = performance.now()
+  receivedLabel.textContent = `${Math.round(receivedThisSecond / elapsedSeconds)} par seconde`
+  skippedLabel.textContent = `${Math.round(skippedThisSecond / elapsedSeconds)} par seconde`
+  if (receivedThisSecond) {
+    sizeLabel.textContent = `${Math.round(bytesThisSecond / receivedThisSecond).toLocaleString('fr-FR')} octets`
+  }
   receivedThisSecond = 0
   skippedThisSecond = 0
   bytesThisSecond = 0
 
-  const reception = receptionLatency.flush()
-  const screen = screenLatency.flush()
-  const parts = []
-  if (reception) {
-    parts.push(`à la réception ${formatMs(reception.average)} (max ${formatMs(reception.max)})`)
-  }
-  if (screen) {
-    parts.push(`à l'écran ${formatMs(screen.average)} (max ${formatMs(screen.max)})`)
-  }
-  latencyLabel.textContent = parts.length ? `Latence ${parts.join(', ')}` : ''
+  showLatency(receptionLatencyLabel, receptionLatency.flush())
+  showLatency(screenLatencyLabel, screenLatency.flush())
 
   if (latest) {
     const { period, time, ball } = latest.frame
-    clockLabel.textContent = `Période ${period} · ${formatClock(time)}${ball ? '' : ' · ballon absent'}`
+    periodLabel.textContent = String(period)
+    clockLabel.textContent = formatClock(time)
+    ballLabel.textContent = ball ? 'suivi' : 'absent'
   }
 }, 1000)
 
-/** En français, 0 et 1 sont au singulier. */
-function plural(count: number, singular: string, pluralForm: string) {
-  return `${count} ${count > 1 ? pluralForm : singular}`
+/** La moyenne, et le maximum en dessous, en plus discret. */
+function showLatency(label: HTMLElement, latency: { average: number; max: number } | null) {
+  if (!latency) {
+    return
+  }
+  const max = document.createElement('span')
+  max.className = 'max'
+  max.textContent = `max ${formatMs(latency.max)}`
+  label.replaceChildren(formatMs(latency.average), max)
 }
 
 function formatMs(milliseconds: number) {
@@ -183,6 +188,7 @@ const connection = connect(SERVER_URL, {
   onBinary,
   onStatus: (status) => {
     statusLabel.textContent = STATUS_LABELS[status]
+    statusLabel.dataset.status = status
     // Le serveur oublie tout d'un client à sa déconnexion : c'est au client de
     // redemander sa fréquence à chaque nouvelle connexion.
     if (status === 'open' && requestedRate < 25) {

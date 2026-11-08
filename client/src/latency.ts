@@ -8,7 +8,7 @@ export function now() {
 }
 
 /**
- * Accumule des mesures de latence sur une fenêtre (une seconde dans le bandeau),
+ * Accumule des mesures de latence sur une fenêtre (une seconde dans le panneau),
  * puis en rend la moyenne et le maximum et repart de zéro.
  *
  * La limite de la mesure : sentAt vient de l'horloge du serveur, l'heure de réception

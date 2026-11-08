@@ -7,13 +7,41 @@
     <title>pitch-live</title>
   </head>
   <body>
-    <header class="hud">
-      <span id="status">Connexion…</span>
-      <span id="clock"></span>
-      <span id="received"></span>
-      <span id="latency"></span>
-      <label>
-        Fréquence demandée
+    <aside class="panel">
+      <h1>pitch-live</h1>
+      <p id="status" class="status" data-status="connecting">Connexion…</p>
+
+      <h2>Match</h2>
+      <dl>
+        <dt>Période</dt>
+        <dd id="period">…</dd>
+        <dt>Temps de jeu</dt>
+        <dd id="clock">…</dd>
+        <dt>Ballon</dt>
+        <dd id="ball">…</dd>
+      </dl>
+
+      <h2>Réception</h2>
+      <dl>
+        <dt>Images reçues</dt>
+        <dd id="received">…</dd>
+        <dt>Images sautées</dt>
+        <dd id="skipped">…</dd>
+        <dt>Taille d'une image</dt>
+        <dd id="size">…</dd>
+      </dl>
+
+      <h2>Latence moyenne</h2>
+      <dl>
+        <dt>À la réception</dt>
+        <dd id="latency-reception">…</dd>
+        <dt>À l'écran</dt>
+        <dd id="latency-screen">…</dd>
+      </dl>
+
+      <h2>Réglages</h2>
+      <label class="field">
+        <span>Fréquence demandée</span>
         <select id="rate">
           <option value="25" selected>25 images/s</option>
           <option value="10">10 images/s</option>
@@ -21,16 +49,24 @@
           <option value="1">1 image/s</option>
         </select>
       </label>
-      <label>
-        Format
+      <label class="field">
+        <span>Format des images</span>
         <select id="format">
           <option value="json">JSON</option>
           <option value="binary">binaire</option>
         </select>
       </label>
-      <label><input type="checkbox" id="smoothing" /> Lisser le mouvement</label>
-      <label><input type="checkbox" id="slow-client" /> Simuler un client lent</label>
-    </header>
+      <label class="toggle">
+        <input type="checkbox" id="smoothing" />
+        Lisser le mouvement
+        <small>au prix d'une image de retard</small>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="slow-client" />
+        Simuler un client lent
+        <small>60 ms de travail par image, pour 40 ms entre deux images</small>
+      </label>
+    </aside>
     <canvas id="pitch"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
