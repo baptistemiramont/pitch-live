@@ -2,6 +2,7 @@ package dev.baptiste.pitch_live;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -13,7 +14,12 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import dev.baptiste.pitch_live.Protocol.FrameMessage;
+import dev.baptiste.pitch_live.Protocol.MatchMessage;
+import dev.baptiste.pitch_live.Protocol.Pitch;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * L'horloge du rejeu : une image toutes les 40 ms, soit 25 par seconde, comme le
@@ -27,6 +33,8 @@ public class MatchReplay {
 	static final long FRAME_INTERVAL_MS = 40;
 
 	private final PitchLiveProperties properties;
+	private final FrameBroadcaster broadcaster;
+	private final JsonMapper json;
 
 	/**
 	 * Un seul thread, dédié et nommé (on le retrouve dans jcmd Thread.print).
@@ -43,14 +51,28 @@ public class MatchReplay {
 	 */
 	private TrackingReader reader;
 
-	public MatchReplay(PitchLiveProperties properties) {
+	/** Spring fournit le JsonMapper (Jackson 3) qu'il configure lui-même. */
+	public MatchReplay(PitchLiveProperties properties, FrameBroadcaster broadcaster, JsonMapper json) {
 		this.properties = properties;
+		this.broadcaster = broadcaster;
+		this.json = json;
+	}
+
+	/**
+	 * Ouvre le match et prépare la présentation pendant la création des beans,
+	 * avant que Tomcat n'accepte la moindre connexion : un client ne peut pas
+	 * arriver avant que la présentation existe.
+	 */
+	@PostConstruct
+	public void open() throws IOException {
+		reader = openReader();
+		Pitch pitch = new Pitch(TrackingReader.PITCH_LENGTH, TrackingReader.PITCH_WIDTH);
+		broadcaster.setPresentation(json.writeValueAsString(new MatchMessage(pitch, reader.profiles())));
 	}
 
 	/** Démarre quand l'application est entièrement prête, Tomcat compris. */
 	@EventListener(ApplicationReadyEvent.class)
-	public void start() throws IOException {
-		reader = openReader();
+	public void start() {
 		// scheduleAtFixedRate vise 0, 40, 80, 120 ms… depuis le départ : un retard
 		// ponctuel est rattrapé et le rythme ne dérive pas. scheduleWithFixedDelay
 		// attendrait 40 ms après la fin de chaque image, et le temps de traitement
@@ -87,11 +109,18 @@ public class MatchReplay {
 	}
 
 	private void publish(Frame frame) {
-		// Une ligne par seconde de match : l'heure des logs doit avancer d'une seconde pile.
-		if (frame.id() % 25 == 0) {
-			log.info("Image {} (t = {} s, {} joueurs, ballon {})",
-					frame.id(), frame.time(), frame.players().size(), frame.ball() == null ? "absent" : "présent");
+		// Le JSON est produit une fois par image, ici, et non une fois par client :
+		// avec cent clients, on sérialise toujours 25 fois par seconde, pas 2 500.
+		broadcaster.publish(json.writeValueAsString(new FrameMessage(epochMillis(Instant.now()), frame)));
+
+		if (frame.id() % (25 * 60) == 0) {
+			log.info("Minute {} du match", frame.id() / (25 * 60));
 		}
+	}
+
+	/** Millisecondes depuis 1970, avec les décimales : le format de Date.now() côté navigateur. */
+	private static double epochMillis(Instant instant) {
+		return instant.getEpochSecond() * 1000.0 + instant.getNano() / 1_000_000.0;
 	}
 
 	private TrackingReader openReader() throws IOException {
