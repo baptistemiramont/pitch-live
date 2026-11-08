@@ -1,12 +1,12 @@
 import type { Frame, Pitch, Player, PlayerProfile, Position, Team } from './protocol.ts'
 
-/** Marge autour du terrain, en mètres : de quoi voir les buts et les joueurs sur la ligne. */
+/** Margin around the pitch, in metres: room for the goals and the players on the line. */
 const MARGIN = 4
 
-/** Les lignes réglementaires font 12 cm. */
+/** Regulation lines are 12 cm wide. */
 const LINE_WIDTH = 0.12
 
-/** Plus gros qu'en vrai, pour rester lisibles. */
+/** Bigger than in real life, to stay readable. */
 const PLAYER_RADIUS = 0.9
 const BALL_RADIUS = 0.45
 
@@ -16,11 +16,11 @@ const LINES = 'rgba(255, 255, 255, 0.8)'
 const BALL = '#ffeb3b'
 
 /**
- * Dessine le terrain, les joueurs et le ballon dans un canvas 2D.
+ * Draws the pitch, the players and the ball in a 2D canvas.
  *
- * Tout arrive en mètres, dans le même repère que le canvas (origine en haut à
- * gauche, y vers le bas) : passer des mètres aux pixels n'est qu'une échelle et un
- * décalage, recalculés à chaque dessin.
+ * Everything arrives in metres, in the same coordinate system as the canvas (origin at
+ * the top left, y pointing down): going from metres to pixels is just a scale and an
+ * offset, recomputed on every draw.
  */
 export class PitchRenderer {
   private readonly canvas: HTMLCanvasElement
@@ -33,16 +33,16 @@ export class PitchRenderer {
   constructor(canvas: HTMLCanvasElement) {
     const context = canvas.getContext('2d')
     if (!context) {
-      throw new Error('Canvas 2D indisponible')
+      throw new Error('2D canvas unavailable')
     }
     this.canvas = canvas
     this.context = context
   }
 
   /**
-   * Aligne la résolution du canvas sur sa taille à l'écran. Sur un écran Retina,
-   * devicePixelRatio vaut 2 : sans ce réglage, le dessin serait flou.
-   * Renvoie true si la taille a changé, et qu'il faut donc redessiner.
+   * Matches the canvas resolution to its size on screen. On a Retina display,
+   * devicePixelRatio is 2: without this, the drawing would be blurry.
+   * Returns true if the size changed, meaning a redraw is needed.
    */
   fitToScreen(): boolean {
     this.ratio = window.devicePixelRatio
@@ -62,9 +62,9 @@ export class PitchRenderer {
     context.fillStyle = '#10141a'
     context.fillRect(0, 0, this.canvas.width, this.canvas.height)
 
-    // Le terrain est redessiné à chaque image : une douzaine de tracés, c'est
-    // négligeable. Avec des cartes de chaleur ou des trajectoires, on le dessinerait
-    // une fois dans un canvas hors écran, puis on le recopierait.
+    // The pitch is redrawn on every frame: a dozen paths, which is negligible. With
+    // heatmaps or trajectories, we would draw it once in an offscreen canvas, then
+    // copy it over.
     this.drawPitch(pitch)
     for (const player of frame.players) {
       this.drawPlayer(player, profiles.get(player.id))
@@ -74,7 +74,7 @@ export class PitchRenderer {
     }
   }
 
-  /** Le plus grand terrain qui tient dans le canvas, centré. */
+  /** The largest pitch that fits in the canvas, centred. */
   private computeScale(pitch: Pitch) {
     const { width, height } = this.canvas
     this.pixelsPerMetre = Math.min(width / (pitch.length + 2 * MARGIN), height / (pitch.width + 2 * MARGIN))
@@ -98,14 +98,14 @@ export class PitchRenderer {
     this.arc(length / 2, centreY, 9.15)
 
     for (const goalLine of [0, length]) {
-      // +1 depuis le but de gauche, -1 depuis celui de droite : vers le centre du terrain
+      // +1 from the left goal, -1 from the right one: towards the centre of the pitch
       const inward = goalLine === 0 ? 1 : -1
-      this.rect(goalLine, centreY - 20.16, inward * 16.5, 40.32) // surface de réparation
-      this.rect(goalLine, centreY - 9.16, inward * 5.5, 18.32) // surface de but
-      this.rect(goalLine, centreY - 3.66, -inward * 2, 7.32) // le but, derrière la ligne
+      this.rect(goalLine, centreY - 20.16, inward * 16.5, 40.32) // penalty area
+      this.rect(goalLine, centreY - 9.16, inward * 5.5, 18.32) // goal area
+      this.rect(goalLine, centreY - 3.66, -inward * 2, 7.32) // the goal, behind the line
 
-      // L'arc de cercle : la partie du cercle de 9,15 m autour du point de penalty
-      // (à 11 m) qui dépasse de la surface (à 16,5 m), soit 5,5 m plus loin.
+      // The penalty arc: the part of the 9.15 m circle around the penalty spot (11 m
+      // out) that sticks out of the area (16.5 m out), that is 5.5 m further.
       const halfAngle = Math.acos(5.5 / 9.15)
       const facing = inward === 1 ? 0 : Math.PI
       this.arc(goalLine + inward * 11, centreY, 9.15, facing - halfAngle, facing + halfAngle)
@@ -154,7 +154,7 @@ export class PitchRenderer {
     context.stroke()
   }
 
-  // Des mètres aux pixels du canvas
+  // From metres to canvas pixels
 
   private x(metres: number) {
     return this.originX + metres * this.pixelsPerMetre
@@ -177,7 +177,7 @@ export class PitchRenderer {
     this.context.lineTo(this.x(x2), this.y(y2))
   }
 
-  /** Un arc ou un cercle complet. Le moveTo évite un trait parasite depuis le tracé précédent. */
+  /** An arc or a full circle. The moveTo avoids a stray line from the previous path. */
   private arc(x: number, y: number, radius: number, start = 0, end = 2 * Math.PI) {
     this.context.moveTo(this.x(x + radius * Math.cos(start)), this.y(y + radius * Math.sin(start)))
     this.context.arc(this.x(x), this.y(y), this.size(radius), start, end)

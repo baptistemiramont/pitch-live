@@ -12,45 +12,45 @@ import {
 import { PitchRenderer } from './render.ts'
 import { interpolate, type ReceivedFrame, type ShownFrame } from './smoothing.ts'
 
-// Le format se choisit à la connexion, par l'adresse de la page : ?format=binary
+// The format is chosen on connection, through the page address: ?format=binary
 const BINARY = new URLSearchParams(location.search).get('format') === 'binary'
 
-// Par défaut, le serveur tourne sur le port 8080 de la machine qui sert la page.
-// VITE_SERVER_URL permet d'en viser un autre : un serveur de test, un déploiement.
+// By default, the server runs on port 8080 of the machine serving the page.
+// VITE_SERVER_URL points to another one: a test server, a deployment.
 const SERVER_URL =
   (import.meta.env.VITE_SERVER_URL ?? `ws://${location.hostname}:8080/match`) + (BINARY ? '?format=binary' : '')
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
-  connecting: 'Connexion…',
-  open: 'Connecté',
-  closed: 'Déconnecté, nouvelle tentative…',
+  connecting: 'Connecting…',
+  open: 'Connected',
+  closed: 'Disconnected, retrying…',
 }
 
-// L'état partagé entre la réception et le dessin : de simples variables, sans
-// framework. La réception les remplace à chaque message ; le dessin les lit au
-// rythme de l'écran. Avec l'état d'un framework comme React, chaque image (25 par
-// seconde) déclencherait un nouveau rendu de composants pour rien.
+// The state shared between receiving and drawing: plain variables, no framework.
+// Receiving replaces them on every message; drawing reads them at the screen's pace.
+// With a framework's state, like React's, every frame (25 per second) would trigger
+// a component re-render for nothing.
 let match: MatchMessage | null = null
 let profiles = new Map<string, PlayerProfile>()
 let latest: ReceivedFrame | null = null
-// L'avant-dernière image ne sert qu'au lissage du mouvement
+// The frame before the latest one is only used to smooth the movement
 let previous: ReceivedFrame | null = null
 let smoothing = false
 let slowClient = false
 let receivedThisSecond = 0
 let bytesThisSecond = 0
 
-// Les images sautées se voient aux trous dans les numéros : à 5 images par seconde,
-// le serveur n'envoie qu'une image sur cinq, toujours la plus récente.
+// Skipped frames show up as gaps in the frame numbers: at 5 frames per second, the
+// server only sends one frame out of five, always the latest one.
 let skippedThisSecond = 0
 let requestedRate = 25
 
-// Deux latences, mesurées depuis la publication par le serveur (sentAt) :
-// - à la réception : file d'attente du serveur, envoi, réseau, boucle d'événements ;
-// - à l'écran : l'âge de ce qui est affiché, relevé à chaque rafraîchissement de
-//   l'écran. C'est la latence que vit l'analyste : une image vieillit tant que la
-//   suivante n'est pas arrivée, et le lissage ajoute une image de retard. Les pixels
-//   n'apparaissent qu'au rafraîchissement suivant, que la page ne voit pas.
+// Two latencies, measured from the moment the server published the frame (sentAt):
+// - on receipt: server queueing, send, network, event loop;
+// - on screen: the age of what is displayed, sampled on every screen refresh. This is
+//   the latency the analyst experiences: a frame ages until the next one arrives, and
+//   smoothing adds one frame of delay. Pixels only appear on the following refresh,
+//   which the page cannot see.
 const receptionLatency = new LatencyWindow()
 const screenLatency = new LatencyWindow()
 
@@ -70,15 +70,15 @@ const formatSelect = document.querySelector<HTMLSelectElement>('#format')!
 const smoothingCheckbox = document.querySelector<HTMLInputElement>('#smoothing')!
 const slowClientCheckbox = document.querySelector<HTMLInputElement>('#slow-client')!
 
-// Réception : aucun dessin ici, on garde seulement les deux dernières images.
+// Receiving: no drawing here, we only keep the last two frames.
 function onMessage(message: ServerMessage, receivedAt: number, size: number) {
   if (message.v !== PROTOCOL_VERSION) {
-    console.warn(`Message en version ${message.v} ignoré, ce client parle la version ${PROTOCOL_VERSION}`)
+    console.warn(`Ignored a version ${message.v} message, this client speaks version ${PROTOCOL_VERSION}`)
     return
   }
   switch (message.type) {
     case 'match':
-      // Nouvelle connexion : les images d'avant ne doivent pas servir au lissage
+      // New connection: earlier frames must not be used for smoothing
       match = message
       profiles = new Map(message.players.map((player) => [player.id, player]))
       previous = null
@@ -92,8 +92,8 @@ function onMessage(message: ServerMessage, receivedAt: number, size: number) {
       if (latest && frame.id > latest.frame.id + 1) {
         skippedThisSecond += frame.id - latest.frame.id - 1
       }
-      // Un numéro plus petit que le précédent : le match a repris au coup d'envoi,
-      // et glisser de la fin du match vers le début n'aurait pas de sens.
+      // A number lower than the previous one: the match restarted from kick-off, and
+      // gliding from the end of the match to its start would make no sense.
       previous = latest && frame.id > latest.frame.id ? latest : null
       latest = { frame, sentAt: message.sentAt, receivedAt }
       receptionLatency.add(receivedAt - message.sentAt)
@@ -104,8 +104,8 @@ function onMessage(message: ServerMessage, receivedAt: number, size: number) {
   }
 }
 
-// Une image binaire ne se comprend qu'avec la feuille de match, reçue en JSON juste
-// avant : le serveur envoie toujours la présentation en premier.
+// A binary frame only makes sense with the roster, received in JSON just before:
+// the server always sends the presentation first.
 function onBinary(data: ArrayBuffer, receivedAt: number) {
   const message = match && decodeBinaryFrame(data, match.players)
   if (message) {
@@ -113,12 +113,12 @@ function onBinary(data: ArrayBuffer, receivedAt: number) {
   }
 }
 
-// Dessin : une fois par rafraîchissement de l'écran (60 fois par seconde en général).
-// Sans lissage, on ne redessine qu'à l'arrivée d'une image ; des messages arrivés en
-// rafale entre deux rafraîchissements ne coûtent qu'une affectation chacun. Avec le
-// lissage, chaque rafraîchissement montre un état intermédiaire différent.
-// Dans un onglet en arrière-plan, le navigateur suspend requestAnimationFrame : on ne
-// dessine plus, mais la réception continue.
+// Drawing: once per screen refresh (usually 60 times per second). Without smoothing,
+// we only redraw when a frame arrives; messages arriving in a burst between two
+// refreshes only cost one assignment each. With smoothing, every refresh shows a
+// different in-between state.
+// In a background tab, the browser pauses requestAnimationFrame: drawing stops, but
+// receiving goes on.
 let lastDrawn: Frame | null = null
 
 function render() {
@@ -135,18 +135,18 @@ function render() {
   requestAnimationFrame(render)
 }
 
-// Le panneau n'a pas besoin de suivre l'écran : une mise à jour par seconde suffit.
-// Les compteurs sont divisés par le temps réellement écoulé : quand la page est
-// surchargée, ce minuteur se déclenche en retard, et pas toutes les secondes.
+// The panel does not need to follow the screen: one update per second is enough.
+// Counters are divided by the time actually elapsed: when the page is overloaded,
+// this timer fires late, and not every second.
 let lastPanelUpdate = performance.now()
 
 setInterval(() => {
   const elapsedSeconds = (performance.now() - lastPanelUpdate) / 1000
   lastPanelUpdate = performance.now()
-  receivedLabel.textContent = `${Math.round(receivedThisSecond / elapsedSeconds)} par seconde`
-  skippedLabel.textContent = `${Math.round(skippedThisSecond / elapsedSeconds)} par seconde`
+  receivedLabel.textContent = `${Math.round(receivedThisSecond / elapsedSeconds)} per second`
+  skippedLabel.textContent = `${Math.round(skippedThisSecond / elapsedSeconds)} per second`
   if (receivedThisSecond) {
-    sizeLabel.textContent = `${Math.round(bytesThisSecond / receivedThisSecond).toLocaleString('fr-FR')} octets`
+    sizeLabel.textContent = `${Math.round(bytesThisSecond / receivedThisSecond).toLocaleString('en-US')} bytes`
   }
   receivedThisSecond = 0
   skippedThisSecond = 0
@@ -159,11 +159,11 @@ setInterval(() => {
     const { period, time, ball } = latest.frame
     periodLabel.textContent = String(period)
     clockLabel.textContent = formatClock(time)
-    ballLabel.textContent = ball ? 'suivi' : 'absent'
+    ballLabel.textContent = ball ? 'tracked' : 'missing'
   }
 }, 1000)
 
-/** La moyenne, et le maximum en dessous, en plus discret. */
+/** The average, with the maximum underneath, more discreet. */
 function showLatency(label: HTMLElement, latency: { average: number; max: number } | null) {
   if (!latency) {
     return
@@ -175,7 +175,7 @@ function showLatency(label: HTMLElement, latency: { average: number; max: number
 }
 
 function formatMs(milliseconds: number) {
-  return `${milliseconds.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms`
+  return `${milliseconds.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms`
 }
 
 function formatClock(seconds: number) {
@@ -189,8 +189,8 @@ const connection = connect(SERVER_URL, {
   onStatus: (status) => {
     statusLabel.textContent = STATUS_LABELS[status]
     statusLabel.dataset.status = status
-    // Le serveur oublie tout d'un client à sa déconnexion : c'est au client de
-    // redemander sa fréquence à chaque nouvelle connexion.
+    // The server forgets everything about a client when it disconnects: it is up to
+    // the client to ask for its rate again on every new connection.
     if (status === 'open' && requestedRate < 25) {
       requestRate()
     }
@@ -210,7 +210,7 @@ smoothingCheckbox.addEventListener('change', () => {
   smoothing = smoothingCheckbox.checked
 })
 
-// Changer de format, c'est ouvrir une autre connexion : on recharge la page
+// Switching format means opening another connection: we reload the page
 formatSelect.value = BINARY ? 'binary' : 'json'
 formatSelect.addEventListener('change', () => {
   location.search = formatSelect.value === 'binary' ? '?format=binary' : ''
@@ -221,26 +221,25 @@ slowClientCheckbox.addEventListener('change', () => {
 })
 
 /**
- * Simule un client lent pour de vrai : chaque image occupe le fil principal 60 ms,
- * plus que les 40 ms qui les séparent. La page n'en traite que 17 par seconde sur 25.
+ * Simulates a genuinely slow client: every frame keeps the main thread busy for 60 ms,
+ * more than the 40 ms between frames. The page only handles 17 frames per second out of 25.
  *
- * Ce que la mesure a montré : le retard grandit sans limite, d'un tiers de seconde
- * chaque seconde (32 s de retard au bout de 95 s), et le serveur ne saute aucune
- * image. Sa boîte aux lettres d'une place ne protège que d'un envoi qui bloque ; or
- * ici l'envoi ne bloque pas. Les images s'entassent dans les tampons entre le serveur
- * et la page (ceux du système, jusqu'à 4 Mo de chaque côté sur macOS, et ceux du
- * navigateur) bien avant que le serveur ne ressente quoi que ce soit, et l'API
- * WebSocket du navigateur n'offre aucun moyen de lui dire de ralentir.
+ * What the measurement showed: the delay grows without bound, by a third of a second
+ * every second (32 s behind after 95 s), and the server does not skip a single frame.
+ * Its one-slot mailbox only protects against a send that blocks; here, sends do not
+ * block. Frames pile up in the buffers between the server and the page (the OS ones, up
+ * to 4 MB on each side on macOS, and the browser's) long before the server notices
+ * anything, and the browser's WebSocket API offers no way to tell it to slow down.
  *
- * Les parades : que le client demande lui-même moins d'images (à 10 par seconde, ce
- * client suit, avec une latence stable autour de 20 ms), ou un contrôle de flux dans
- * le protocole, où le client accuse réception de chaque image et où le serveur n'en
- * a jamais plus d'une en route vers lui.
+ * The remedies: the client asks for fewer frames itself (at 10 per second, this client
+ * keeps up, with a steady latency around 20 ms), or flow control in the protocol, where
+ * the client acknowledges every frame and the server never has more than one in flight
+ * towards it.
  */
 function simulateHeavyWork() {
   const end = performance.now() + 60
   while (performance.now() < end) {
-    // attente active : rien d'autre ne peut s'exécuter sur la page pendant ce temps
+    // busy wait: nothing else can run on the page meanwhile
   }
 }
 

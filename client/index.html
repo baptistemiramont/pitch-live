@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -9,62 +9,62 @@
   <body>
     <aside class="panel">
       <h1>pitch-live</h1>
-      <p id="status" class="status" data-status="connecting">Connexion…</p>
+      <p id="status" class="status" data-status="connecting">Connecting…</p>
 
       <h2>Match</h2>
       <dl>
-        <dt>Période</dt>
+        <dt>Period</dt>
         <dd id="period">…</dd>
-        <dt>Temps de jeu</dt>
+        <dt>Match time</dt>
         <dd id="clock">…</dd>
-        <dt>Ballon</dt>
+        <dt>Ball</dt>
         <dd id="ball">…</dd>
       </dl>
 
-      <h2>Réception</h2>
+      <h2>Reception</h2>
       <dl>
-        <dt>Images reçues</dt>
+        <dt>Frames received</dt>
         <dd id="received">…</dd>
-        <dt>Images sautées</dt>
+        <dt>Frames skipped</dt>
         <dd id="skipped">…</dd>
-        <dt>Taille d'une image</dt>
+        <dt>Frame size</dt>
         <dd id="size">…</dd>
       </dl>
 
-      <h2>Latence moyenne</h2>
+      <h2>Average latency</h2>
       <dl>
-        <dt>À la réception</dt>
+        <dt>On receipt</dt>
         <dd id="latency-reception">…</dd>
-        <dt>À l'écran</dt>
+        <dt>On screen</dt>
         <dd id="latency-screen">…</dd>
       </dl>
 
-      <h2>Réglages</h2>
+      <h2>Settings</h2>
       <label class="field">
-        <span>Fréquence demandée</span>
+        <span>Requested rate</span>
         <select id="rate">
-          <option value="25" selected>25 images/s</option>
-          <option value="10">10 images/s</option>
-          <option value="5">5 images/s</option>
-          <option value="1">1 image/s</option>
+          <option value="25" selected>25 frames/s</option>
+          <option value="10">10 frames/s</option>
+          <option value="5">5 frames/s</option>
+          <option value="1">1 frame/s</option>
         </select>
       </label>
       <label class="field">
-        <span>Format des images</span>
+        <span>Frame format</span>
         <select id="format">
           <option value="json">JSON</option>
-          <option value="binary">binaire</option>
+          <option value="binary">binary</option>
         </select>
       </label>
       <label class="toggle">
         <input type="checkbox" id="smoothing" />
-        Lisser le mouvement
-        <small>au prix d'une image de retard</small>
+        Smooth the movement
+        <small>at the cost of one frame of delay</small>
       </label>
       <label class="toggle">
         <input type="checkbox" id="slow-client" />
-        Simuler un client lent
-        <small>60 ms de travail par image, pour 40 ms entre deux images</small>
+        Simulate a slow client
+        <small>60 ms of work per frame, with 40 ms between frames</small>
       </label>
     </aside>
     <canvas id="pitch"></canvas>

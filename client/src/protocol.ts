@@ -1,51 +1,51 @@
-// Le contrat entre le serveur et le navigateur.
-// Miroir de server/src/main/java/dev/baptiste/pitch_live/Protocol.java (et de
-// BinaryFrameEncoder.java pour le format binaire) : toute modification là-bas doit
-// être reportée ici, à la main.
+// The contract between the server and the browser.
+// Mirrors server/src/main/java/dev/baptiste/pitch_live/Protocol.java (and
+// BinaryFrameEncoder.java for the binary format): any change there must be carried
+// over here, by hand.
 
 export const PROTOCOL_VERSION = 1
 
 export type Team = 'HOME' | 'AWAY'
 
-/** En mètres, origine en haut à gauche du terrain, axe y vers le bas. */
+/** In metres, origin at the top left of the pitch, y axis pointing down. */
 export type Position = { x: number; y: number }
 
 export type Pitch = { length: number; width: number }
 
 export type PlayerProfile = { id: string; team: Team; number: number }
 
-/** Un joueur présent sur le terrain ; les absents ne figurent pas dans l'image. */
+/** A player on the pitch; players off the pitch are not in the frame. */
 export type Player = { id: string; position: Position }
 
 export type Frame = {
   id: number
   period: number
-  /** Temps de jeu en secondes depuis le coup d'envoi. */
+  /** Match time in seconds since kick-off. */
   time: number
   players: Player[]
-  /** null quand le ballon n'est pas suivi (arrêt de jeu, perte de suivi). */
+  /** null when the ball is not tracked (stoppage, tracking loss). */
   ball: Position | null
 }
 
-/** Reçu une fois, à la connexion : le terrain et la feuille de match. */
+/** Received once, on connection: the pitch and the roster. */
 export type MatchMessage = { v: number; type: 'match'; pitch: Pitch; players: PlayerProfile[] }
 
-/** Reçu à chaque image ; sentAt est l'heure de publication par le serveur, en ms depuis 1970. */
+/** Received with every frame; sentAt is the time the server published it, in ms since 1970. */
 export type FrameMessage = { v: number; type: 'frame'; sentAt: number; frame: Frame }
 
 export type ServerMessage = MatchMessage | FrameMessage
 
-/** Envoyé au serveur : ne recevoir que fps images par seconde (de 1 à 25). */
+/** Sent to the server: only send fps frames per second (1 to 25). */
 export type RateRequest = { v: number; type: 'rate'; fps: number }
 
 export type ClientMessage = RateRequest
 
 /**
- * Décode une image reçue en binaire (connexion ouverte avec ?format=binary).
- * BinaryFrameEncoder.java décrit la disposition octet par octet. DataView lit en
- * big-endian par défaut, comme ByteBuffer écrit en Java. Les joueurs y sont désignés
- * par leur rang dans la feuille de match reçue à la connexion.
- * Renvoie null pour un type de message inconnu.
+ * Decodes a frame received in binary (connection opened with ?format=binary).
+ * BinaryFrameEncoder.java describes the layout byte by byte. DataView reads big-endian
+ * by default, as ByteBuffer writes in Java. Players are referred to by their rank in
+ * the roster received on connection.
+ * Returns null for an unknown message type.
  */
 export function decodeBinaryFrame(data: ArrayBuffer, roster: PlayerProfile[]): FrameMessage | null {
   const view = new DataView(data)

@@ -4,7 +4,7 @@ import type { ClientMessage, ServerMessage } from './protocol.ts'
 export type ConnectionStatus = 'connecting' | 'open' | 'closed'
 
 type Listeners = {
-  /** size : la taille du message décodé, en octets (pas sa taille compressée sur le réseau). */
+  /** size: the size of the decoded message, in bytes (not its compressed size on the wire). */
   onMessage: (message: ServerMessage, receivedAt: number, size: number) => void
   onBinary: (data: ArrayBuffer, receivedAt: number) => void
   onStatus: (status: ConnectionStatus) => void
@@ -14,11 +14,11 @@ const FIRST_RETRY_MS = 250
 const MAX_RETRY_MS = 5000
 
 /**
- * Ouvre la WebSocket, et la rouvre quand elle tombe.
+ * Opens the WebSocket, and reopens it when it drops.
  *
- * Avec WebSocket, la reconnexion est à notre charge : c'est le coût noté dans la
- * conception face à SSE, qui la gère seul. Le délai double à chaque échec, plafonné
- * à 5 s, pour ne pas marteler un serveur en train de redémarrer.
+ * With WebSocket, reconnecting is our job: that is the cost noted in the design,
+ * compared with SSE, which handles it on its own. The delay doubles on every failure,
+ * capped at 5 s, so as not to hammer a server that is restarting (exponential backoff).
  */
 export function connect(url: string, listeners: Listeners) {
   let retryDelay = FIRST_RETRY_MS
@@ -27,7 +27,7 @@ export function connect(url: string, listeners: Listeners) {
   const open = () => {
     listeners.onStatus('connecting')
     socket = new WebSocket(url)
-    // Les messages binaires arrivent en ArrayBuffer, que DataView sait lire directement
+    // Binary messages arrive as ArrayBuffer, which DataView reads directly
     socket.binaryType = 'arraybuffer'
 
     socket.onopen = () => {
@@ -36,10 +36,10 @@ export function connect(url: string, listeners: Listeners) {
     }
 
     socket.onmessage = (event) => {
-      // L'heure de réception est prise avant le décodage, pour ne pas le compter
+      // The receipt time is taken before decoding, so that decoding is not counted
       const receivedAt = now()
       if (typeof event.data === 'string') {
-        // Le JSON du serveur ne contient que de l'ASCII : un caractère, un octet
+        // The server's JSON is pure ASCII: one character, one byte
         listeners.onMessage(JSON.parse(event.data), receivedAt, event.data.length)
       } else {
         listeners.onBinary(event.data, receivedAt)
@@ -56,7 +56,7 @@ export function connect(url: string, listeners: Listeners) {
   open()
 
   return {
-    /** Envoie si la connexion est ouverte ; sinon le message est perdu, d'où le renvoi à chaque connexion. */
+    /** Sends if the connection is open; otherwise the message is lost, hence resending on every connection. */
     send(message: ClientMessage) {
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(message))

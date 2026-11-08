@@ -1,22 +1,22 @@
 /**
- * L'heure actuelle en millisecondes depuis 1970, avec des décimales : la même échelle
- * que le sentAt du serveur. Date.now() s'arrête à la milliseconde, trop grossier
- * pour des latences de l'ordre de la milliseconde en local.
+ * The current time in milliseconds since 1970, with decimals: the same scale as the
+ * server's sentAt. Date.now() stops at the millisecond, too coarse for latencies of
+ * about a millisecond on a local machine.
  */
 export function now() {
   return performance.timeOrigin + performance.now()
 }
 
 /**
- * Accumule des mesures de latence sur une fenêtre (une seconde dans le panneau),
- * puis en rend la moyenne et le maximum et repart de zéro.
+ * Accumulates latency measurements over a window (one second in the panel), then
+ * returns their average and maximum and starts over.
  *
- * La limite de la mesure : sentAt vient de l'horloge du serveur, l'heure de réception
- * de celle du navigateur. Sur une même machine, c'est la même horloge et la mesure
- * est juste. Sur deux machines, l'écart entre leurs horloges (quelques millisecondes
- * au mieux avec NTP) s'ajoute à la mesure, et peut dépasser la latence elle-même.
- * Il faudrait alors estimer cet écart, par exemple avec un aller-retour ping/pong,
- * dont on suppose la moitié égale à l'aller.
+ * The limit of the measurement: sentAt comes from the server's clock, the receipt time
+ * from the browser's. On a single machine, it is the same clock and the measurement is
+ * accurate. Across two machines, the offset between their clocks (a few milliseconds at
+ * best with NTP) adds up to the measurement, and can exceed the latency itself. That
+ * offset would then have to be estimated, for instance with a ping/pong round trip,
+ * assuming half of it is the one-way trip.
  */
 export class LatencyWindow {
   private sum = 0
@@ -29,7 +29,7 @@ export class LatencyWindow {
     this.max = Math.max(this.max, milliseconds)
   }
 
-  /** Moyenne et maximum depuis le dernier appel, ou null s'il n'y a eu aucune mesure. */
+  /** Average and maximum since the last call, or null if there was no measurement. */
   flush(): { average: number; max: number } | null {
     if (this.count === 0) {
       return null

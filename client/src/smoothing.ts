@@ -1,24 +1,25 @@
 import type { Frame, Player, Position } from './protocol.ts'
 
-/** Une image telle que reçue : son contenu, son heure d'envoi et son heure de réception. */
+/** A frame as received: its content, the time it was sent and the time it was received. */
 export type ReceivedFrame = { frame: Frame; sentAt: number; receivedAt: number }
 
-/** Ce qu'on dessine : une image, réelle ou intermédiaire, et l'heure d'envoi qui lui correspond. */
+/** What gets drawn: a frame, real or in-between, and the send time it corresponds to. */
 export type ShownFrame = { frame: Frame; sentAt: number }
 
 /**
- * L'état intermédiaire entre l'avant-dernière et la dernière image reçue.
+ * The in-between state between the second-to-last and the latest frame received
+ * (interpolation).
  *
- * Le principe : au lieu de dessiner la dernière image dès son arrivée, on glisse de
- * l'avant-dernière vers elle, pendant le temps qui les séparait côté serveur. La
- * dernière est atteinte quand la suivante doit arriver, et le mouvement devient
- * continu. Le prix : le terrain est montré avec une image de retard, soit 40 ms à
- * 25 images par seconde, mais une seconde entière à 1 image par seconde.
+ * The idea: instead of drawing the latest frame as soon as it arrives, we glide from
+ * the previous one towards it, over the time that separated them on the server. The
+ * latest frame is reached when the next one is due, and the movement becomes
+ * continuous. The price: the pitch is shown one frame late, that is 40 ms at 25 frames
+ * per second, but a whole second at 1 frame per second.
  *
- * La limite : on suppose que les images arrivent à intervalles réguliers. Si le réseau
- * en retarde une, le dessin s'arrête sur la dernière en attendant, sans extrapoler ;
- * si deux arrivent collées, il saute. Un lecteur plus robuste garderait une petite
- * réserve d'images (un « jitter buffer ») et dessinerait avec un retard fixe.
+ * The limit: frames are assumed to arrive at regular intervals. If the network delays
+ * one, the drawing stops on the latest frame while waiting, without extrapolating; if
+ * two arrive together, it jumps. A sturdier player would keep a small reserve of frames
+ * (a jitter buffer) and draw with a fixed delay.
  */
 export function interpolate(previous: ReceivedFrame, latest: ReceivedFrame, now: number): ShownFrame {
   const interval = latest.sentAt - previous.sentAt
@@ -27,7 +28,7 @@ export function interpolate(previous: ReceivedFrame, latest: ReceivedFrame, now:
   const before = new Map(previous.frame.players.map((player) => [player.id, player.position]))
   const players: Player[] = latest.frame.players.map((player) => {
     const from = before.get(player.id)
-    // Un joueur qui vient d'entrer n'a pas de position précédente : il apparaît directement
+    // A player who has just come on has no previous position: they appear directly
     return from ? { id: player.id, position: lerp(from, player.position, progress) } : player
   })
   const ball =

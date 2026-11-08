@@ -15,7 +15,7 @@ body {
   color: #e6e6e6;
 }
 
-/* Le panneau à gauche, le terrain sur toute la place restante */
+/* The panel on the left, the pitch on all the remaining space */
 body {
   display: flex;
 }
@@ -47,7 +47,7 @@ body {
   margin: 0;
 }
 
-/* Une pastille de couleur selon l'état de la connexion */
+/* A coloured dot reflecting the connection status */
 .status::before {
   content: '';
   display: inline-block;
@@ -129,7 +129,7 @@ select {
   height: 100%;
 }
 
-/* Sur un écran étroit, le panneau passe au-dessus du terrain */
+/* On a narrow screen, the panel moves above the pitch */
 @media (max-width: 800px) {
   body {
     flex-direction: column;
