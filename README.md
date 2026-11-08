@@ -2,6 +2,10 @@
 
 Replays a real football match at 25 frames per second from a Java server (Spring Boot), broadcasts it over WebSocket and displays it in 2D in the browser. The design is described in [docs/design.md](docs/design.md).
 
+![The first goal of match 1: the home team's number 9 scores a header at 1:31, and the panel updates the score and the event log](docs/demo.gif)
+
+*Match 1 from 1:26 to 1:36 on the match clock, recorded in Chromium with smoothing on: the home team's #9 (red) scores a header, and the score and the event log update in the panel.*
+
 ## Requirements
 
 - JDK 25 (`brew install --cask temurin@25`)
