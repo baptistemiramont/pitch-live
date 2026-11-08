@@ -15,7 +15,7 @@ server:
 client: client/node_modules
 	cd client && bun run dev
 
-test: client/node_modules
+test: data client/node_modules
 	cd server && ./mvnw test
 	cd client && bunx tsc
 
