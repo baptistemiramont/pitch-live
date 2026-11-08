@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Télécharge les données de suivi d'un match d'exemple de Metrica Sports.
+# Downloads the tracking data of one of Metrica Sports' sample matches.
 # Source : https://github.com/metrica-sports/sample-data
-# Usage : scripts/download-data.sh [1|2]   (match 1 par défaut)
+# Usage: scripts/download-data.sh [1|2]   (match 1 by default)
 set -euo pipefail
 
 GAME="${1:-1}"
 if [[ "$GAME" != "1" && "$GAME" != "2" ]]; then
-  echo "Seuls les matchs 1 et 2 sont en CSV." >&2
+  echo "Only matches 1 and 2 are available in CSV." >&2
   exit 1
 fi
 
@@ -17,10 +17,10 @@ mkdir -p "$DEST"
 for team in Home Away; do
   file="Sample_Game_${GAME}_RawTrackingData_${team}_Team.csv"
   if [[ -s "$DEST/$file" ]]; then
-    echo "Déjà présent : $file"
+    echo "Already there: $file"
     continue
   fi
-  echo "Téléchargement de $file"
+  echo "Downloading $file"
   curl --fail --location --silent --show-error --output "$DEST/$file.part" "$BASE_URL/$file"
   mv "$DEST/$file.part" "$DEST/$file"
 done

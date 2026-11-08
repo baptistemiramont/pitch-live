@@ -1,10 +1,10 @@
 .PHONY: help data server client test
 
 help:
-	@echo "make data     télécharge les données du match 1 de Metrica"
-	@echo "make server   lance le serveur Spring Boot sur le port 8080"
-	@echo "make client   lance le client Vite sur le port 5173"
-	@echo "make test     lance les tests du serveur et vérifie les types du client"
+	@echo "make data     downloads match 1 from Metrica"
+	@echo "make server   runs the Spring Boot server on port 8080"
+	@echo "make client   runs the Vite client on port 5173"
+	@echo "make test     runs the server tests and type-checks the client"
 
 data:
 	./scripts/download-data.sh

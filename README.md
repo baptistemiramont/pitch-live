@@ -1,108 +1,108 @@
 # pitch-live
 
-Rejoue un vrai match de football à 25 images par seconde depuis un serveur Java (Spring Boot), le diffuse en WebSocket et l'affiche en 2D dans le navigateur. La conception est décrite dans [docs/conception.md](docs/conception.md).
+Replays a real football match at 25 frames per second from a Java server (Spring Boot), broadcasts it over WebSocket and displays it in 2D in the browser. The design is described in [docs/design.md](docs/design.md).
 
-## Prérequis
+## Requirements
 
 - JDK 25 (`brew install --cask temurin@25`)
 - [Bun](https://bun.sh)
 - make
 
-## Lancer le projet
+## Running the project
 
 ```bash
-make data     # télécharge les données du match 1 dans data/
-make server   # serveur sur http://localhost:8080
-make client   # client sur http://localhost:5173
-make test     # tests du serveur et vérification des types du client
+make data     # downloads match 1 into data/
+make server   # server on http://localhost:8080
+make client   # client on http://localhost:5173
+make test     # server tests and client type check
 ```
 
-Le serveur et le client se lancent chacun dans son terminal. Pour viser un autre serveur que le port 8080 de la machine, lancer le client avec `VITE_SERVER_URL=ws://hôte:port/match`.
+The server and the client each run in their own terminal. To point the client at a server other than port 8080 of the machine, start it with `VITE_SERVER_URL=ws://host:port/match`.
 
-Dans la page, le bandeau du haut affiche les images reçues et sautées, la taille moyenne d'une image et deux latences : à la réception, et l'âge de ce qui est à l'écran. Il permet aussi de :
+In the page, the panel on the left shows the frames received and skipped, the average frame size and two latencies: on receipt, and the age of what is on screen. It also lets you:
 
-- **demander moins d'images** au serveur, de 25 à 1 par seconde : ouvrir deux onglets à des fréquences différentes montre qu'un client lent ne retarde pas l'autre ;
-- **choisir le format** des images, JSON ou binaire (`?format=binary` dans l'adresse de la page) ;
-- **lisser le mouvement** entre deux images, au prix d'une image de retard ;
-- **simuler un client lent** : chaque image occupe la page 60 ms, plus que les 40 ms qui les séparent.
+- **request fewer frames** from the server, from 25 down to 1 per second: two tabs at different rates show that a slow client does not hold the other one back;
+- **choose the frame format**, JSON or binary (`?format=binary` in the page address);
+- **smooth the movement** between two frames, at the cost of one frame of delay;
+- **simulate a slow client**: every frame keeps the page busy for 60 ms, more than the 40 ms between frames.
 
-## Les échanges entre le serveur et le navigateur
+## Messages between the server and the browser
 
-Trois messages en JSON, chacun avec sa version (`v`). Le contrat est décrit en miroir dans [Protocol.java](server/src/main/java/dev/baptiste/pitch_live/Protocol.java) et [protocol.ts](client/src/protocol.ts).
+Three JSON messages, each carrying its version (`v`). The contract is mirrored in [Protocol.java](server/src/main/java/dev/baptiste/pitch_live/Protocol.java) and [protocol.ts](client/src/protocol.ts).
 
-| Message | Sens | Quand | Contenu |
+| Message | Direction | When | Content |
 | --- | --- | --- | --- |
-| `match` | serveur vers navigateur | une fois, à la connexion | les dimensions du terrain et les 28 joueurs (identifiant, équipe, numéro) |
-| `frame` | serveur vers navigateur | à chaque image | numéro, période, temps de jeu, joueurs présents (identifiant et position en mètres), ballon ou `null`, heure d'envoi `sentAt` |
-| `rate` | navigateur vers serveur | quand l'analyste change de fréquence | le nombre d'images par seconde voulu, de 1 à 25 |
+| `match` | server to browser | once, on connection | the pitch dimensions and the 28 players (id, team, shirt number) |
+| `frame` | server to browser | on every frame | frame number, period, match time, players on the pitch (id and position in metres), ball or `null`, send time `sentAt` |
+| `rate` | browser to server | when the analyst changes the rate | the number of frames per second wanted, from 1 to 25 |
 
-Un client qui se connecte avec `?format=binary` reçoit la présentation en JSON, puis les images en binaire : 135 octets au lieu de 1 240, avec les joueurs désignés par leur rang dans la présentation. La disposition octet par octet est décrite dans [BinaryFrameEncoder.java](server/src/main/java/dev/baptiste/pitch_live/BinaryFrameEncoder.java).
+A client connecting with `?format=binary` gets the presentation in JSON, then the frames in binary: 135 bytes instead of 1,240, with players referred to by their rank in the presentation. The byte-by-byte layout is described in [BinaryFrameEncoder.java](server/src/main/java/dev/baptiste/pitch_live/BinaryFrameEncoder.java).
 
 ```mermaid
 sequenceDiagram
-    participant N as Navigateur
-    participant S as Serveur
+    participant B as Browser
+    participant S as Server
 
-    N->>S: ouverture de la WebSocket sur /match
-    S-->>N: match, le terrain et la feuille de match
-    S-->>N: frame, la dernière image publiée, sans attendre la suivante
-    loop toutes les 40 ms
-        S-->>N: frame, les positions et l'heure d'envoi
+    B->>S: opens the WebSocket on /match
+    S-->>B: match, the pitch and the roster
+    S-->>B: frame, the latest published frame, without waiting for the next one
+    loop every 40 ms
+        S-->>B: frame, the positions and the send time
     end
-    N->>S: rate, 5 images par seconde
-    loop toutes les 200 ms
-        S-->>N: frame, toujours la plus récente, les autres sont sautées
+    B->>S: rate, 5 frames per second
+    loop every 200 ms
+        S-->>B: frame, always the latest one, the others are skipped
     end
-    Note over N,S: la connexion tombe
-    N->>S: reconnexion après 250 ms, puis un délai doublé à chaque échec, 5 s au plus
-    S-->>N: match puis frame, comme à la première connexion
-    N->>S: rate, 5 images par seconde, car le serveur a tout oublié
+    Note over B,S: the connection drops
+    B->>S: reconnects after 250 ms, then with a delay doubled on every failure, 5 s at most
+    S-->>B: match then frame, as on the first connection
+    B->>S: rate, 5 frames per second, because the server forgot everything
 ```
 
-## À l'intérieur
+## Inside
 
-Côté serveur, un client lent ne ralentit personne : l'horloge dépose chaque image dans la boîte aux lettres de chaque client sans jamais attendre, et chaque client a son propre thread d'envoi. Côté navigateur, la réception et le dessin sont séparés : la réception garde la dernière image, le dessin la relit au rythme de l'écran.
+Server side, a slow client slows nobody down: the clock drops every frame into each client's mailbox without ever waiting, and every client has its own sender thread. Browser side, receiving and drawing are separate: receiving keeps the latest frame, drawing reads it again at the screen's pace.
 
 ```mermaid
 flowchart TB
-    csv[("CSV de Metrica<br/>domicile et extérieur")]
-    subgraph serveur["Serveur Spring Boot"]
-        reader["TrackingReader<br/>une ligne de chaque fichier à la fois"]
-        clock["Thread d'horloge<br/>une image toutes les 40 ms"]
-        broadcaster["FrameBroadcaster<br/>le JSON est produit une seule fois"]
-        mailboxA["Boîte aux lettres A<br/>une place, l'image en attente est remplacée"]
-        mailboxB["Boîte aux lettres B<br/>une place, l'image en attente est remplacée"]
-        senderA["Thread virtuel A<br/>envoie au rythme de son client"]
-        senderB["Thread virtuel B<br/>envoie au rythme de son client"]
+    csv[("Metrica CSV files<br/>home and away")]
+    subgraph server["Spring Boot server"]
+        reader["TrackingReader<br/>one line of each file at a time"]
+        clock["Clock thread<br/>one frame every 40 ms"]
+        broadcaster["FrameBroadcaster<br/>JSON is produced only once"]
+        mailboxA["Mailbox A<br/>one slot, the waiting frame is replaced"]
+        mailboxB["Mailbox B<br/>one slot, the waiting frame is replaced"]
+        senderA["Virtual thread A<br/>sends at its client's pace"]
+        senderB["Virtual thread B<br/>sends at its client's pace"]
         reader --> clock --> broadcaster
         broadcaster --> mailboxA --> senderA
         broadcaster --> mailboxB --> senderB
     end
-    subgraph navigateurA["Navigateur A"]
-        reception["Réception<br/>garde la dernière image"]
-        draw["Dessin dans le canvas<br/>au rythme de l'écran"]
+    subgraph browserA["Browser A"]
+        reception["Receiving<br/>keeps the latest frame"]
+        draw["Drawing in the canvas<br/>at the screen's pace"]
         reception --> draw
     end
-    navigateurB["Navigateur B"]
+    browserB["Browser B"]
     csv --> reader
     senderA -- WebSocket --> reception
-    senderB -- WebSocket --> navigateurB
+    senderB -- WebSocket --> browserB
     reception -. "rate" .-> senderA
 ```
 
-## Ce que montrent les mesures
+## What the measurements show
 
-Mesuré en local, sur les premières secondes du match 1 : le serveur et le navigateur partagent la même horloge, la latence mesurée est donc juste. Entre deux machines, l'écart entre leurs horloges s'ajouterait à la mesure.
+Measured locally, over the first seconds of match 1: the server and the browser share the same clock, so the measured latency is accurate. Between two machines, the offset between their clocks would add up to the measurement.
 
-| Mesure | Résultat |
+| Measurement | Result |
 | --- | --- |
-| Taille d'une image | 1 240 octets en JSON, 135 en binaire. Sur le réseau, la compression permessage-deflate, négociée par défaut, les ramène à environ 176 et 126 octets. |
-| Latence à la réception | Moins de 2 ms à 25 images par seconde. De 11 à 27 ms quand le client demande moins d'images, le temps que l'image attende dans sa boîte aux lettres. |
-| Âge de ce qui est à l'écran | 20 ms en moyenne à 25 images par seconde (42 au plus). 41 ms avec le lissage, mais régulier. À 1 image par seconde : 530 ms sans lissage, 1 010 ms avec. |
-| Client lent | Un retard qui grandit sans limite : 32 s au bout de 95 s, sans qu'aucune image soit sautée côté serveur. À 10 images par seconde, le même client suit. |
+| Frame size | 1,240 bytes in JSON, 135 in binary. On the wire, the permessage-deflate compression, negotiated by default, brings them down to about 176 and 126 bytes. |
+| Latency on receipt | Under 2 ms at 25 frames per second. 11 to 27 ms when the client asks for fewer frames, while the frame waits in its mailbox. |
+| Age of what is on screen | 20 ms on average at 25 frames per second (42 at most). 41 ms with smoothing, but steady. At 1 frame per second: 530 ms without smoothing, 1,010 ms with it. |
+| Slow client | A delay that grows without bound: 32 s after 95 s, without the server skipping a single frame. At 10 frames per second, the same client keeps up. |
 
-La dernière ligne est la plus instructive. La boîte aux lettres d'une place protège des envois qui bloquent : réseau lent, client qui ne lit plus. Elle ne protège pas d'une page trop lente à traiter ce qu'elle reçoit, car les images s'entassent d'abord dans les tampons du système et du navigateur, qui font plusieurs mégaoctets, et le serveur ne ressent rien. Il faut alors que le client demande lui-même moins d'images, ou un contrôle de flux dans le protocole : le client accuse réception de chaque image, et le serveur n'en a jamais plus d'une en route vers lui.
+The last row is the most instructive. The one-slot mailbox protects against sends that block: a slow network, a client that stops reading. It does not protect against a page that is too slow to process what it receives, because frames first pile up in the OS and browser buffers, several megabytes, and the server feels nothing. The client must then ask for fewer frames itself, or the protocol needs flow control: the client acknowledges every frame, and the server never has more than one in flight towards it.
 
-## Les données
+## The data
 
-Les données de suivi viennent des [données d'exemple de Metrica Sports](https://github.com/metrica-sports/sample-data) : des matchs réels et anonymisés, avec la position de chaque joueur et du ballon 25 fois par seconde. Elles ne sont pas versionnées dans ce dépôt, `make data` les télécharge.
+The tracking data comes from [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data): real, anonymised matches, with the position of every player and of the ball 25 times per second. It is not versioned in this repository; `make data` downloads it.
