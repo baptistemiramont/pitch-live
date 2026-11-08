@@ -206,11 +206,17 @@ function showLatency(label: HTMLElement, latency: { average: number; max: number
   }
   const max = document.createElement('span')
   max.className = 'max'
-  max.textContent = `max ${formatMs(latency.max)}`
-  label.replaceChildren(formatMs(latency.average), max)
+  max.textContent = `max ${formatLatency(latency.max)}`
+  label.replaceChildren(formatLatency(latency.average), max)
 }
 
-function formatMs(milliseconds: number) {
+// Below a millisecond, the measurement is noise: the browser's clock and the server's
+// only agree to within about a millisecond, even on one machine (see latency.ts). We
+// even measured -0.7 ms. Showing "< 1 ms" is more honest than a precise-looking number.
+function formatLatency(milliseconds: number) {
+  if (milliseconds < 1) {
+    return '< 1 ms'
+  }
   return `${milliseconds.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms`
 }
 

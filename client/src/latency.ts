@@ -12,11 +12,14 @@ export function now() {
  * returns their average and maximum and starts over.
  *
  * The limit of the measurement: sentAt comes from the server's clock, the receipt time
- * from the browser's. On a single machine, it is the same clock and the measurement is
- * accurate. Across two machines, the offset between their clocks (a few milliseconds at
- * best with NTP) adds up to the measurement, and can exceed the latency itself. That
- * offset would then have to be estimated, for instance with a ping/pong round trip,
- * assuming half of it is the one-way trip.
+ * from the browser's. Even on a single machine, they are not quite the same clock: the
+ * server reads the system clock, which NTP keeps adjusting, while the browser's clock is
+ * anchored at page load and then runs on a monotonic timer. Measured: the two differ by
+ * +0.6 to -0.7 ms over 80 seconds, so anything under about a millisecond is noise.
+ * Across two machines, the offset between their clocks (a few milliseconds at best with
+ * NTP) adds up to the measurement, and can exceed the latency itself. That offset would
+ * then have to be estimated, for instance with a ping/pong round trip, assuming half of
+ * it is the one-way trip.
  */
 export class LatencyWindow {
   private sum = 0

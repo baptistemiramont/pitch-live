@@ -102,7 +102,7 @@ flowchart TB
 
 ## What the measurements show
 
-Measured locally, over the first seconds of match 1: the server and the browser share the same clock, so the measured latency is accurate. Between two machines, the offset between their clocks would add up to the measurement.
+Measured locally, over the first seconds of match 1. Even on one machine, the server's clock (the system clock, adjusted by NTP) and the browser's (anchored at page load, then monotonic) only agree to within about a millisecond: the panel shows "< 1 ms" below that, after once displaying -0.7 ms. Between two machines, the offset between their clocks would add up to the measurement.
 
 | Measurement | Result |
 | --- | --- |
