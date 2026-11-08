@@ -33,9 +33,11 @@ import java.util.Map;
  *
  * Sur le réseau, l'écart est bien moindre : navigateur et Tomcat négocient par défaut
  * la compression permessage-deflate, qui ramène le JSON à environ 176 octets et le
- * binaire à 126 (estimé en rejouant cette compression sur 250 images). Le vrai gain du
- * binaire est ailleurs : la compression se fait connexion par connexion, donc une fois
- * par client et par image, alors que le binaire compact s'encode une fois pour tous.
+ * binaire à 126 (estimé en rejouant cette compression sur 250 images). Et elle se fait
+ * connexion par connexion, donc une fois par client et par image ; Tomcat l'applique
+ * aussi aux messages binaires. Le binaire n'économiserait ce calcul qu'en coupant la
+ * compression pour ses clients : il partirait alors tel quel, 135 octets encodés une
+ * seule fois pour tous.
  */
 public class BinaryFrameEncoder {
 
