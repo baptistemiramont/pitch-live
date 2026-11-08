@@ -19,8 +19,9 @@ make test     # server tests and client type check
 
 The server and the client each run in their own terminal. To point the client at a server other than port 8080 of the machine, start it with `VITE_SERVER_URL=ws://host:port/match`.
 
-In the page, the panel on the left shows the frames received and skipped, the average frame size and two latencies: on receipt, and the age of what is on screen. It also lets you:
+In the page, the panel on the left shows the score with the goals and cards as they happen, the frames received and skipped, the average frame size and two latencies: on receipt, and the age of what is on screen. It also lets you:
 
+- **restart from kick-off**, for every viewer: the replay is shared, like a live broadcast;
 - **request fewer frames** from the server, from 25 down to 1 per second: two tabs at different rates show that a slow client does not hold the other one back;
 - **choose the frame format**, JSON or binary (`?format=binary` in the page address);
 - **smooth the movement** between two frames, at the cost of one frame of delay;
@@ -28,13 +29,17 @@ In the page, the panel on the left shows the frames received and skipped, the av
 
 ## Messages between the server and the browser
 
-Three JSON messages, each carrying its version (`v`). The contract is mirrored in [Protocol.java](server/src/main/java/dev/baptiste/pitch_live/Protocol.java) and [protocol.ts](client/src/protocol.ts).
+Five JSON messages, each carrying its version (`v`). The contract is mirrored in [Protocol.java](server/src/main/java/dev/baptiste/pitch_live/Protocol.java) and [protocol.ts](client/src/protocol.ts).
 
 | Message | Direction | When | Content |
 | --- | --- | --- | --- |
 | `match` | server to browser | once, on connection | the pitch dimensions and the 28 players (id, team, shirt number) |
+| `events` | server to browser | on connection, then whenever it changes | the score, and every goal and card so far |
 | `frame` | server to browser | on every frame | frame number, period, match time, players on the pitch (id and position in metres), ball or `null`, send time `sentAt` |
 | `rate` | browser to server | when the analyst changes the rate | the number of frames per second wanted, from 1 to 25 |
+| `restart` | browser to server | when the analyst restarts the match | nothing else: the whole replay goes back to kick-off |
+
+Goals and cards come from Metrica's event data, whose frame numbers are aligned with the tracking data: the clock releases each event at the frame where it happens. A frame is state, and losing one does not matter since a newer one follows; a goal is an event, and must never be lost. So the `events` message carries the whole log rather than the latest event: a client that skips frames, or joins late, still ends up with every goal.
 
 A client connecting with `?format=binary` gets the presentation in JSON, then the frames in binary: 135 bytes instead of 1,240, with players referred to by their rank in the presentation. The byte-by-byte layout is described in [BinaryFrameEncoder.java](server/src/main/java/dev/baptiste/pitch_live/BinaryFrameEncoder.java).
 
@@ -45,18 +50,23 @@ sequenceDiagram
 
     B->>S: opens the WebSocket on /match
     S-->>B: match, the pitch and the roster
+    S-->>B: events, the score and the goals and cards so far
     S-->>B: frame, the latest published frame, without waiting for the next one
     loop every 40 ms
         S-->>B: frame, the positions and the send time
     end
+    Note over S: a goal at frame 2289
+    S-->>B: events, 1 - 0 and the goal, just before its frame
     B->>S: rate, 5 frames per second
     loop every 200 ms
         S-->>B: frame, always the latest one, the others are skipped
     end
     Note over B,S: the connection drops
     B->>S: reconnects after 250 ms, then with a delay doubled on every failure, 5 s at most
-    S-->>B: match then frame, as on the first connection
+    S-->>B: match, events then frame, as on the first connection
     B->>S: rate, 5 frames per second, because the server forgot everything
+    B->>S: restart
+    S-->>B: events, back to 0 - 0, then the frames from kick-off, to every viewer
 ```
 
 ## Inside
@@ -105,4 +115,6 @@ The last row is the most instructive. The one-slot mailbox protects against send
 
 ## The data
 
-The tracking data comes from [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data): real, anonymised matches, with the position of every player and of the ball 25 times per second. It is not versioned in this repository; `make data` downloads it.
+The tracking and event data come from [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data): real, anonymised matches, with the position of every player and of the ball 25 times per second, and the events of the match (passes, shots, cards). They are not versioned in this repository; `make data` downloads them.
+
+The teams and the competition of match 1 are unknown, on purpose: Metrica anonymised them. The data still tells the story: the home team (red) wins 3-0, with goals at 1:31, 60:00 and 66:01 on the panel's match time, which runs on without stopping at half-time.
