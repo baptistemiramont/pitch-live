@@ -57,7 +57,10 @@ export type ServerMessage = MatchMessage | FrameMessage | EventsMessage
 /** Sent to the server: only send fps frames per second (1 to 25). */
 export type RateRequest = { v: number; type: 'rate'; fps: number }
 
-export type ClientMessage = RateRequest
+/** Sent to the server: back to kick-off, for every viewer since the replay is shared. */
+export type RestartRequest = { v: number; type: 'restart' }
+
+export type ClientMessage = RateRequest | RestartRequest
 
 /**
  * Decodes a frame received in binary (connection opened with ?format=binary).

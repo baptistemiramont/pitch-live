@@ -100,6 +100,28 @@ public class MatchReplay {
 		log.info("Replay started, one frame every {} ms", FRAME_INTERVAL_MS);
 	}
 
+	/**
+	 * Back to kick-off, at a viewer's request. Can be called from any thread.
+	 *
+	 * The reader is confined to the clock thread: instead of touching it from the Tomcat
+	 * thread that received the request, we hand the rewind over to the clock itself. The
+	 * task runs between two ticks, never during one, so no lock is needed.
+	 *
+	 * The replay is shared, like a live broadcast: restarting it restarts it for every
+	 * viewer. A per-analyst rewind would need one reader per client, or a store of frames
+	 * indexed by time.
+	 */
+	public void restart() {
+		clock.execute(() -> {
+			try {
+				rewind();
+				log.info("Restarted from kick-off at a viewer's request");
+			} catch (IOException e) {
+				log.error("Cannot restart from kick-off", e);
+			}
+		});
+	}
+
 	@PreDestroy
 	public void stop() throws IOException, InterruptedException {
 		clock.shutdownNow();

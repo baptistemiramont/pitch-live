@@ -73,6 +73,7 @@ const rateSelect = document.querySelector<HTMLSelectElement>('#rate')!
 const formatSelect = document.querySelector<HTMLSelectElement>('#format')!
 const smoothingCheckbox = document.querySelector<HTMLInputElement>('#smoothing')!
 const slowClientCheckbox = document.querySelector<HTMLInputElement>('#slow-client')!
+const restartButton = document.querySelector<HTMLButtonElement>('#restart')!
 
 // Receiving: no drawing here, we only keep the last two frames.
 function onMessage(message: ServerMessage, receivedAt: number, size: number) {
@@ -253,6 +254,13 @@ formatSelect.addEventListener('change', () => {
 
 slowClientCheckbox.addEventListener('change', () => {
   slowClient = slowClientCheckbox.checked
+})
+
+// Nothing to reset here: the server starts again from frame 1, and the frame numbers
+// going down already tell the client the match restarted. The event log comes back
+// empty, with a 0 - 0 score.
+restartButton.addEventListener('click', () => {
+  connection.send({ v: PROTOCOL_VERSION, type: 'restart' })
 })
 
 /**

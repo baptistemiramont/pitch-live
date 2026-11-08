@@ -112,6 +112,25 @@ select {
   font: inherit;
 }
 
+button {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #21262d;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #30363d;
+}
+
+.field small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .toggle {
   display: grid;
   grid-template-columns: auto 1fr;

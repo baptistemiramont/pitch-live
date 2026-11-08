@@ -54,7 +54,14 @@ public final class Protocol {
 		}
 	}
 
-	/** Received from the browser: it only wants fps frames per second (1 to 25). */
-	public record RateRequest(int v, String type, int fps) {
+	/**
+	 * Received from the browser. Two types:
+	 * <ul>
+	 * <li>"rate": only send fps frames per second (1 to 25);</li>
+	 * <li>"restart": go back to kick-off, for every viewer since the replay is shared.</li>
+	 * </ul>
+	 * fps is an Integer rather than an int because "restart" has none: Jackson leaves it null.
+	 */
+	public record ClientRequest(int v, String type, Integer fps) {
 	}
 }

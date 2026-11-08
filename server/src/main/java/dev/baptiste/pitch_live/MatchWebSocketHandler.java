@@ -11,7 +11,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import dev.baptiste.pitch_live.Protocol.RateRequest;
+import dev.baptiste.pitch_live.Protocol.ClientRequest;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,10 +28,12 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 	private static final Logger log = LoggerFactory.getLogger(MatchWebSocketHandler.class);
 
 	private final FrameBroadcaster broadcaster;
+	private final MatchReplay replay;
 	private final JsonMapper json;
 
-	public MatchWebSocketHandler(FrameBroadcaster broadcaster, JsonMapper json) {
+	public MatchWebSocketHandler(FrameBroadcaster broadcaster, MatchReplay replay, JsonMapper json) {
 		this.broadcaster = broadcaster;
+		this.replay = replay;
 		this.json = json;
 	}
 
@@ -48,9 +50,15 @@ public class MatchWebSocketHandler extends TextWebSocketHandler {
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) {
 		try {
-			RateRequest request = json.readValue(message.getPayload(), RateRequest.class);
-			if (request.v() == Protocol.VERSION && "rate".equals(request.type()) && request.fps() >= 1) {
+			ClientRequest request = json.readValue(message.getPayload(), ClientRequest.class);
+			if (request.v() == Protocol.VERSION && "rate".equals(request.type())
+					&& request.fps() != null && request.fps() >= 1) {
 				broadcaster.setRate(session.getId(), request.fps());
+				return;
+			}
+			if (request.v() == Protocol.VERSION && "restart".equals(request.type())) {
+				log.info("Client {} restarts the match for every viewer", session.getId());
+				replay.restart();
 				return;
 			}
 		} catch (JacksonException e) {
