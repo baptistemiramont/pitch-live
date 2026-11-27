@@ -1,37 +1,96 @@
-# pitch-live
-
-Replays a real football match at 25 frames per second from a Java server (Spring Boot), broadcasts it over WebSocket and displays it in 2D in the browser. The design is described in [docs/design.md](docs/design.md).
+<div align="center">
+  <img src="client/public/favicon.svg" alt="Pitch Live icon" width="112" height="112">
+  <h1>Pitch Live</h1>
+  <p>
+    <strong>A football match, live in your browser.</strong><br>
+    A Java server replays real tracking data at 25 frames per second and streams it over WebSocket; the browser draws every player and the ball in 2D.
+  </p>
+  <p>
+    <a href="#features">Features</a>
+    ·
+    <a href="#getting-started">Getting started</a>
+    ·
+    <a href="#how-it-works">How it works</a>
+    ·
+    <a href="#roadmap">Roadmap</a>
+  </p>
+  <p>
+    <img alt="Java 25" src="https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk&logoColor=white">
+    <img alt="Spring Boot 4" src="https://img.shields.io/badge/Spring%20Boot-4-6DB33F?logo=springboot&logoColor=white">
+    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white">
+    <img alt="Vite" src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white">
+    <img alt="Early version" src="https://img.shields.io/badge/status-early%20version-2e7d32">
+  </p>
+</div>
 
 ![The first goal of match 1: the home team's number 9 scores a header at 1:31, and the panel updates the score and the event log](docs/demo.gif)
 
-*Match 1 from 1:26 to 1:36 on the match clock, recorded in Chromium with smoothing on: the home team's #9 (red) scores a header, and the score and the event log update in the panel.*
+<p align="center"><em>Match 1 from 1:26 to 1:36 on the match clock, with smoothing on: the home team's #9 (red) scores a header, and the score and the event log update in the panel.</em></p>
 
-## Requirements
+## Features
 
-- JDK 25 (`brew install --cask temurin@25`)
-- [Bun](https://bun.sh)
-- make
+- **Live replay at 25 frames per second**: a real match from Metrica Sports' open tracking data, every player and the ball, in metres.
+- **One shared broadcast**: every viewer watches the same stream, sees the whole pitch at once when joining mid-match, and anyone can restart from kick-off for everyone.
+- **Live score**: goals and cards appear as they happen, and a viewer who skipped frames or joined late still gets every goal.
+- **A rate per viewer**: each client asks for 1 to 25 frames per second, and a slow client never holds the others back.
+- **JSON or binary frames**, chosen by each client: 1,240 bytes in JSON, 135 in binary.
+- **Smooth movement**: optional interpolation between the last two frames, at the cost of one frame of delay.
+- **Live metrics**: frames received and skipped, frame size, latency on receipt and age of what is on screen.
+- **Slow client simulation**: 60 ms of work per frame, more than the 40 ms between frames, to see what happens when the browser cannot keep up.
+- **Automatic reconnection**, with a delay doubled on every failure, 5 s at most.
 
-## Running the project
+## Tech stack
 
-```bash
-make data     # downloads match 1 into data/
-make server   # server on http://localhost:8080
-make client   # client on http://localhost:5173
-make test     # server tests and client type check
-```
+| Area | Tools |
+| --- | --- |
+| Server | [Java 25](https://openjdk.org), [Spring Boot](https://spring.io/projects/spring-boot) 4.1, raw WebSocket, virtual threads |
+| Client | [TypeScript](https://www.typescriptlang.org), Canvas 2D, no framework |
+| Build | [Maven](https://maven.apache.org) wrapper, [Vite](https://vite.dev), [Bun](https://bun.sh), make |
+| Tests | JUnit, TypeScript type check |
+| Data | [Metrica Sports sample data](https://github.com/metrica-sports/sample-data) |
 
-The server and the client each run in their own terminal. To point the client at a server other than port 8080 of the machine, start it with `VITE_SERVER_URL=ws://host:port/match`.
+## Getting started
 
-In the page, the panel on the left shows the score with the goals and cards as they happen, the frames received and skipped, the average frame size and two latencies: on receipt, and the age of what is on screen. It also lets you:
+Requirements: JDK 25 (for example [Temurin](https://adoptium.net)), [Bun](https://bun.sh) and make.
 
-- **restart from kick-off**, for every viewer: the replay is shared, like a live broadcast;
-- **request fewer frames** from the server, from 25 down to 1 per second: two tabs at different rates show that a slow client does not hold the other one back;
-- **choose the frame format**, JSON or binary (`?format=binary` in the page address);
-- **smooth the movement** between two frames, at the cost of one frame of delay;
-- **simulate a slow client**: every frame keeps the page busy for 60 ms, more than the 40 ms between frames.
+1. Start the server, which downloads match 1 into `data/` the first time:
 
-## Messages between the server and the browser
+    ```sh
+    make server
+    ```
+
+    It listens on port 8080, with the WebSocket endpoint on `/match`.
+
+2. In another terminal, start the client:
+
+    ```sh
+    make client
+    ```
+
+    It runs at [http://localhost:5173](http://localhost:5173).
+
+3. Open it in two tabs, set one to 1 frame per second, and watch the other stay live. The first goal comes at 1:31.
+
+To point the client at a server other than port 8080 of the machine, start it with `VITE_SERVER_URL=ws://host:port/match`. To receive binary frames, add `?format=binary` to the page address, or pick the format in the panel.
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `make data` | Download match 1 from Metrica into `data/` |
+| `make server` | Run the Spring Boot server on port 8080 |
+| `make client` | Run the Vite client on port 5173 |
+| `make test` | Run the server tests and type-check the client |
+
+### The match
+
+The teams and the competition of match 1 are unknown, on purpose: Metrica anonymised them. The data still tells the story: the home team (red) wins 3-0, with goals at 1:31, 60:00 and 66:01 on the panel's match time, which runs on without stopping at half-time.
+
+## How it works
+
+The design, its decisions and what the measurements taught are described in [docs/design.md](docs/design.md).
+
+### Messages between the server and the browser
 
 Five JSON messages, each carrying its version (`v`). The contract is mirrored in [Protocol.java](server/src/main/java/dev/baptiste/pitch_live/Protocol.java) and [protocol.ts](client/src/protocol.ts).
 
@@ -73,7 +132,7 @@ sequenceDiagram
     S-->>B: events, back to 0 - 0, then the frames from kick-off, to every viewer
 ```
 
-## Inside
+### Inside
 
 Server side, a slow client slows nobody down: the clock drops every frame into each client's mailbox without ever waiting, and every client has its own sender thread. Browser side, receiving and drawing are separate: receiving keeps the latest frame, drawing reads it again at the screen's pace.
 
@@ -104,7 +163,7 @@ flowchart TB
     reception -. "rate" .-> senderA
 ```
 
-## What the measurements show
+### What the measurements show
 
 Measured locally, over the first seconds of match 1. Even on one machine, the server's clock (the system clock, adjusted by NTP) and the browser's (anchored at page load, then monotonic) only agree to within about a millisecond: the panel shows "< 1 ms" below that, after once displaying -0.7 ms. Between two machines, the offset between their clocks would add up to the measurement.
 
@@ -117,8 +176,50 @@ Measured locally, over the first seconds of match 1. Even on one machine, the se
 
 The last row is the most instructive. The one-slot mailbox protects against sends that block: a slow network, a client that stops reading. It does not protect against a page that is too slow to process what it receives, because frames first pile up in the OS and browser buffers, several megabytes, and the server feels nothing. The client must then ask for fewer frames itself, or the protocol needs flow control: the client acknowledges every frame, and the server never has more than one in flight towards it.
 
-## The data
+## Project structure
 
-The tracking and event data come from [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data): real, anonymised matches, with the position of every player and of the ball 25 times per second, and the events of the match (passes, shots, cards). They are not versioned in this repository; `make data` downloads them.
+```text
+server/src/main/java/dev/baptiste/pitch_live/
+├── TrackingReader.java         Both tracking files side by side, converted to metres
+├── EventReader.java            Goals and cards from the event file
+├── MatchReplay.java            The clock: one frame every 40 ms, restart from kick-off
+├── FrameBroadcaster.java       Fans every frame out to all connected clients
+├── ClientConnection.java       A connected browser: its mailbox, rate and sender thread
+├── BinaryFrameEncoder.java     The binary frame layout
+├── MatchWebSocketHandler.java  The WebSocket endpoint
+└── Protocol.java               The message contract
+client/src/
+├── connection.ts               WebSocket connection and reconnection
+├── protocol.ts                 The message contract, mirrored from Protocol.java
+├── render.ts                   The pitch, the players and the ball in a canvas
+├── smoothing.ts                Interpolation between the last two frames
+├── latency.ts                  Latency measurements
+└── main.ts                     Receiving, drawing and the panel
+docs/                           Design document and demo recording
+scripts/                        Data download
+```
 
-The teams and the competition of match 1 are unknown, on purpose: Metrica anonymised them. The data still tells the story: the home team (red) wins 3-0, with goals at 1:31, 60:00 and 66:01 on the panel's match time, which runs on without stopping at half-time.
+## Roadmap
+
+### Streaming
+
+- **Flow control**: the client acknowledges every frame and the server never has more than one in flight towards it, so a slow page cannot pile up frames in its buffers.
+- **Adaptive rate**: the client lowers its own rate when its latency on receipt climbs.
+- **Protobuf frames**, with compression turned off for those clients, for when payloads grow.
+- **Scale out**: a message bus between the replay and several WebSocket servers, each broadcasting to its own clients.
+- **Several matches at once**, each with its own clock, presentation and latest frame.
+
+### Analysis
+
+- **Trajectories, zones and heatmaps** drawn on the pitch.
+- **Rewind per viewer**, from a store of frames indexed by time, with the live edge served separately.
+- **A live tracking source** instead of the CSV replay: only the reader changes, since the contract is in metres.
+
+## Credits
+
+- Tracking and event data from [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data): real, anonymised matches, with the position of every player and of the ball 25 times per second, and the events of the match. They are not versioned in this repository; `make data` downloads them.
+- Conversion to metres after [LaurieOnTracking](https://www.github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking), by Laurie Shaw.
+
+---
+
+<p align="center">Made by <a href="https://baptistemiramont.fr">Baptiste Miramont</a></p>
